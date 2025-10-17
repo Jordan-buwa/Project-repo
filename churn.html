@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Real-Time Customer Churn Prediction — ML Canvas</title>
+    <style>
+        :root{
+            --primary-color:#2c3e50;
+            --secondary-color:#3498db;
+            --accent-color:#e74c3c;
+            --light-color:#ecf0f1;
+            --dark-color:#34495e;
+            --success-color:#2ecc71;
+            --warning-color:#f39c12;
+            --border-radius:10px;
+            --card-padding:20px;
+            --box-shadow: 0 6px 18px rgba(18, 25, 30, 0.08);
+            --transition: all 0.28s ease;
+            --max-width:1200px;
+        }
+
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{
+            font-family: "Segoe UI", Roboto, system-ui, -apple-system, "Helvetica Neue", Arial;
+            background: linear-gradient(180deg,#f6f8fb 0%, #f2f6fb 100%);
+            color:#233043;
+            padding:28px;
+            -webkit-font-smoothing:antialiased;
+        }
+
+        .container{
+            max-width:var(--max-width);
+            margin:0 auto;
+        }
+
+        header{
+            background:var(--primary-color);
+            color:#fff;
+            padding:22px;
+            border-radius:12px;
+            box-shadow:var(--box-shadow);
+            margin-bottom:22px;
+        }
+
+        header h1{
+            font-size:1.6rem;
+            font-weight:600;
+            letter-spacing:0.2px;
+        }
+
+        header p.subtitle{
+            opacity:.95;
+            margin-top:6px;
+            font-size:0.95rem;
+        }
+
+        /* Groups (collapsible) */
+        .group {
+            margin-bottom:18px;
+            border-radius:10px;
+            overflow:hidden;
+            box-shadow:var(--box-shadow);
+            background:white;
+            transition:var(--transition);
+            border:1px solid rgba(34,48,67,0.05);
+        }
+        .group-header{
+            display:flex;
+            gap:12px;
+            align-items:center;
+            justify-content:space-between;
+            padding:16px 18px;
+            cursor:pointer;
+            background:linear-gradient(90deg, rgba(52,152,219,0.06), rgba(44,62,80,0.02));
+            user-select:none;
+        }
+        .group-header .meta{
+            display:flex;
+            gap:12px;
+            align-items:center;
+        }
+        .group-title{
+            font-weight:650;
+            font-size:1.05rem;
+            color:var(--primary-color);
+        }
+        .group-sub{
+            font-size:0.87rem;
+            color: #5a6b7a;
+            opacity:0.95;
+        }
+        .chev{
+            width:36px;
+            height:36px;
+            border-radius:9px;
+            display:inline-grid;
+            place-items:center;
+            background:transparent;
+            transition:transform .25s ease;
+            color:var(--secondary-color);
+            font-weight:700;
+        }
+        .chev.rotate{ transform:rotate(180deg) }
+
+        .group-body{
+            padding:14px;
+            display:none; /* collapsed by default */
+            gap:18px;
+        }
+
+        /* Cards */
+        .cards {
+            display:grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap:14px;
+        }
+        .card{
+            background:white;
+            border-radius:10px;
+            padding:var(--card-padding);
+            box-shadow: 0 6px 12px rgba(26,37,48,0.04);
+            border-top:5px solid var(--secondary-color);
+            transition: transform .18s ease, box-shadow .18s ease;
+            position:relative;
+        }
+        .card:hover{ transform: translateY(-6px); box-shadow: 0 16px 30px rgba(18,25,30,0.08) }
+        .card h3{
+            font-size:1.02rem;
+            color:var(--primary-color);
+            margin-bottom:8px;
+            display:flex;
+            align-items:center;
+            gap:10px;
+        }
+        .card p.lead{
+            color:#475569;
+            font-size:0.92rem;
+            margin-bottom:10px;
+        }
+        .card ul{ margin-left:16px; margin-top:8px; color:#475569; font-size:0.9rem; }
+        .card li{ margin-bottom:6px; line-height:1.3; }
+        .card .badge{
+            position:absolute;
+            top:14px;
+            right:14px;
+            background:var(--secondary-color);
+            color:white;
+            width:34px;
+            height:34px;
+            border-radius:50%;
+            display:inline-grid;
+            place-items:center;
+            font-weight:700;
+        }
+
+        /* Utility */
+        .muted{ color:#6b7785; font-size:0.88rem }
+        .small{ font-size:0.82rem; color:#6f7b85; }
+        .section-foot{ padding:14px 18px; border-top:1px dashed rgba(34,48,67,0.06); background:#fbfdff; font-size:0.88rem; color:#64707a; border-radius:0 0 10px 10px; }
+
+        /* Responsive tweaks */
+        @media (max-width:900px){
+            header h1{ font-size:1.25rem }
+            .group-body{ padding:12px }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Real-Time Customer Churn Prediction — Machine Learning Canvas</h1>
+            <p class="subtitle">Complete, interactive canvas (MVP scope)</p>
+        </header>
+
+        <!-- Group: Background -->
+        <section class="group" aria-expanded="false">
+            <div class="group-header" tabindex="0">
+                <div class="meta">
+                    <div>
+                        <div class="group-title">Background</div>
+                        <div class="group-sub">Users, goals, pains and context</div>
+                    </div>
+                </div>
+                <div class="chev">▾</div>
+            </div>
+
+            <div class="group-body">
+                <div class="cards">
+                    <article class="card" id="background">
+                        <div class="badge">1</div>
+                        <h3>Background</h3>
+                        <p class="lead">Target users, Goals and Pains</p>
+                        <ul>
+                            <li><strong>Users:</strong> Business development, Customer retention team, Marketing, Sales, CRM.</li>
+                            <li><strong>Goals:</strong> Reduce churn rate, improve customer retention, increase LTV, target marketing effort.</li>
+                            <li><strong>Pains:</strong> Unable to identify dissatisfied customers, leading to revenue loss.</li>
+                        </ul>
+                    </article>
+                </div>
+                <div class="section-foot">Focus on understanding user goals and pains to design an effective solution.</div>
+            </div>
+        </section>
+
+        <!-- Group: Value Proposition -->
+        <section class="group" aria-expanded="false">
+            <div class="group-header" tabindex="0">
+                <div class="meta">
+                    <div>
+                        <div class="group-title">Value Proposition</div>
+                        <div class="group-sub">Product</div>
+                    </div>
+                </div>
+                <div class="chev">▾</div>
+            </div>
+
+            <div class="group-body">
+                <div class="cards">
+                    <article class="card" id="value-prop">
+                        <div class="badge">2</div>
+                        <h3>Value Proposition</h3>
+                        <p class="lead">Value we aim to deliver</p>
+                        <ul>
+                            <li><strong>Product:</strong> End-to-end real-time churn prediction system.</li>
+                            <li><strong>Alleviates:</strong> Mitigating the challenge of identifying at-risk customers in real-time, enabling timely, personalized retention actions.</li>
+                            <li><strong>Advantages:</strong> Improves customer retention, prioritizes high-value customers, increase revenue.</li>
+                        </ul>
+                    </article>
+                </div>
+                <div class="section-foot">Focus on how the product reduces user pains and creates gains.</div>
+            </div>
+        </section>
+
+        <!-- Group: Objectives -->
+<section class="group" aria-expanded="false">
+    <div class="group-header" tabindex="0">
+        <div class="meta">
+            <div>
+                <div class="group-title">Objectives</div>
+                <div class="group-sub">Project breakdown</div>
+            </div>
+        </div>
+        <div class="chev">▾</div>
+    </div>
+
+    <div class="group-body">
+        <div class="cards">
+            <article class="card" id="objectives">
+                <div class="badge">3</div>
+                <h3>Objectives</h3>
+                <p class="lead">What capabilities we deliver to users.</p>
+                <ul>
+                    <li><strong>Real-time Churn Scoring:</strong> Provides instant churn risk scores for every customer, enabling immediate retention actions.</li>
+                    <li><strong>Batch Analytics:</strong> Generates daily reports on overall churn trends to support strategic decisions.</li>
+                    <li><strong>Real-time Monitoring:</strong> Continuously monitors system and model health to ensure accurate predictions.</li>
+                    <li><strong>Automated Model Updates:</strong> Automatically retrains and improves the model over time for sustained performance.</li>
+                    <li><strong>CRM Integration:</strong> Integrate seamlessly with CRM systems to streamline agent workflows.</li>
+                </ul>
+            </article>
+        </div>
+        <div class="section-foot">Focus on achieving minimum viable product with core objectives met for initial deployment.</div>
+    </div>
+</section>
+
+
+        <!-- Group: Solution -->
+<section class="group" aria-expanded="false">
+    <div class="group-header" tabindex="0">
+        <div class="meta">
+            <div>
+                <div class="group-title">Solution</div>
+                <div class="group-sub">Technical architecture, implementation approach and constraints</div>
+            </div>
+        </div>
+        <div class="chev">▾</div>
+    </div>
+
+    <div class="group-body">
+        <div class="cards">
+            <article class="card" id="solution">
+                <div class="badge">4</div>
+                <h3>Solution Architecture</h3>
+                <p class="lead">How we technically deliver the objectives.</p>
+                <ul>
+                    <li><strong>Churn Score:</strong> Provides a real-time risk score for each customer to trigger retention actions.</li>
+                    <li><strong>Customer Metrics:</strong> Tracks average spend, tenure, and engagement patterns for insights.</li>
+                    <li><strong>Behavioral Analytics:</strong> Monitors usage patterns, interaction frequency, and support tickets.</li>
+                    <li><strong>Integration:</strong> The product integrates seamlessly with the company CRM system to push risk scores, alerts, and actionable insights directly to agent dashboards.</li>
+                    <li><strong>Alternative Approach:</strong> Rule-based predictions can serve as a fallback for initial MVP testing or if the ML model is unavailable.</li>
+                </ul>
+            </article>
+
+            <article class="card" id="constraints">
+                <div class="badge">5</div>
+                <h3>Constraints & Limitations</h3>
+                <p class="lead">Technical and operational boundaries we must work within.</p>
+                <ul>
+                    <li><strong>Constraints:</strong>Real-time churn prediction, low latency (<100ms)</li>
+                    <li><strong>Timeline:</strong> 3-week MVP delivery deadline</li>
+                    <!--li><strong>Budget:</strong> Requires ~50$</li-->
+                    <li><strong>Security:</strong> PII anonymization, RBAC, audit logging required</li>
+                    <li><strong>Out-of-scope:</strong> Direct customer communication (SMS, Email), which will be handled by the CRM system.</li>
+                </ul>
+            </article>
+        </div>
+        <div class="section-foot">Design decisions must balance innovation with practical constraints of team size and timeline.</div>
+    </div>
+</section>
+
+        <!-- Group: Data & Labeling -->
+        <section class="group" aria-expanded="false">
+            <div class="group-header" tabindex="0">
+                <div class="meta">
+                    <div>
+                        <div class="group-title">Data & Labeling</div>
+                        <div class="group-sub">Training and production data sources, labeling process</div>
+                    </div>
+                </div>
+                <div class="chev">▾</div>
+            </div>
+
+            <div class="group-body">
+                <div class="cards">
+                    <article class="card" id="data-sources">
+                        <div class="badge">6</div>
+                        <h3>Data Sources</h3>
+                        <p class="lead">Describe the training and production sources of data.</p>
+                        <ul>
+                            <li><strong>Training:</strong> CRM, historical churn labels, billing system, service logs.</li>
+                            <li><strong>Production:</strong> Usage events, session logs, billing events.</li>
+                            <li><strong>External:</strong> Third-party engagement logs where available.</li>
+                        </ul>
+                    </article>
+
+                    <article class="card" id="labeling">
+                        <div class="badge">7</div>
+                        <h3>Labeling Process</h3>
+                        <p class="lead">Describe the labeling process and decisions.</p>
+                        <ul>
+                            <li><strong>Labels:</strong>Churned customers are marked as 1 for churn and 0 otherwise in the historical data.</li>
+                            <li><strong>Reality:</strong> No explicit churn flags; churn must be inferred from inactivity.</li>
+                            <li><strong>Decisions:</strong> Define a reasonable inactivity threshold to label customers as churned for model training, based on company context.</li>
+                        </ul>
+                    </article>
+                </div>
+                <div class="section-foot">Focus on dataset labeling and versionsing for scalability and reproducibility.</div>
+            </div>
+        </section>
+
+        <!-- Group: Metrics -->
+        <section class="group" aria-expanded="false">
+            <div class="group-header" tabindex="0">
+                <div class="meta">
+                    <div>
+                        <div class="group-title">Metrics</div>
+                        <div class="group-sub">Key metrics that reflect the objectives</div>
+                    </div>
+                </div>
+                <div class="chev">▾</div>
+            </div>
+
+            <div class="group-body">
+                <div class="cards">
+                    <article class="card" id="metrics">
+                        <div class="badge">8</div>
+                        <h3>Metrics</h3>
+                        <p class="lead">Tie core objectives with quantitative metrics that our model can optimize towards.</p>
+                        <ul>
+                            <li><strong>Business:</strong> Measures customer retention rate and computes churn rate to assess overall business impact.</li>
+                            <li><strong>ML:</strong> Evaluates model performance using ROC-AUC, PR-AUC, Precision, Recall, and F1-score to ensure accurate churn detection.</li>
+                            <li><strong>System:</strong> Monitors latency, throughput, and error rate to validate real-time prediction performance.</li>
+                        </ul>
+                    </article>
+                </div>
+                <div class="section-foot">Focus on setting baselines for MVP.</div>
+            </div>
+        </section>
+
+        <!-- Group: Evaluation -->
+        <section class="group" aria-expanded="false">
+            <div class="group-header" tabindex="0">
+                <div class="meta">
+                    <div>
+                        <div class="group-title">Evaluation</div>
+                        <div class="group-sub">Offline and online evaluation criteria</div>
+                    </div>
+                </div>
+                <div class="chev">▾</div>
+            </div>
+
+            <div class="group-body">
+                <div class="cards">
+                    <article class="card" id="evaluation-offline">
+                        <div class="badge">9</div>
+                        <h3>Evaluation</h3>
+                        <p class="lead">When and how we'll evaluate our model.</p>
+                        <ul>
+                            <li><strong>Offline:</strong>  Use stratified cross-validation to ensure robustness and handle class imbalance during model training.</li>
+                            <li><strong>Online:</strong> A/B tests (out-of-scope).</li>
+                            <li><strong>Continuous:</strong> Track key model metrics over time, comparing against baseline and historical performance.</li>
+                            <li><strong>Monitoring:</strong> Integrate technical alerts (e.g., data drift, label drift, performance drop) with business monitoring to identify real-world impacts of model changes.</li>
+                        </ul>
+                    </article>
+                </div>
+                <div class="section-foot">Combine alerts with business monitoring to detect real impact from model changes.</div>
+            </div>
+        </section>
+
+        <!-- Group: Modeling -->
+        <section class="group" aria-expanded="false">
+            <div class="group-header" tabindex="0">
+                <div class="meta">
+                    <div>
+                        <div class="group-title">Modeling</div>
+                        <div class="group-sub">Iterative approach to model our task</div>
+                    </div>
+                </div>
+                <div class="chev">▾</div>
+            </div>
+
+            <div class="group-body">
+                <div class="cards">
+                    <article class="card" id="modeling">
+                        <div class="badge">10</div>
+                        <h3>Modeling Approach</h3>
+                        <p class="lead">Core models to use.</p>
+                        <ul>
+                            <li><strong>Model families:</strong> Logistic Regression, Random Forest, XGBoost/LightGBM, Neural Network.</li>
+                            <li><strong>Approach:</strong> Begin with interpretable models (e.g., Logistic Regression, Random Forest) to ensure explainability and faster iteration.</li>
+                            <li><strong>Scalability:</strong> Gradually introduce more complex models (e.g., XGBoost, Neural Network) for performance improvement after baseline evaluation.</li>
+                        </ul>
+                    </article>
+                </div>
+                <div class="section-foot">Prioritize simpler models with strong explainability for pilot deployment.</div>
+            </div>
+        </section>
+
+        <!-- Group: Inference -->
+        <section class="group" aria-expanded="false">
+            <div class="group-header" tabindex="0">
+                <div class="meta">
+                    <div>
+                        <div class="group-title">Inference</div>
+                        <div class="group-sub">Batch or real-time inference approach</div>
+                    </div>
+                </div>
+                <div class="chev">▾</div>
+            </div>
+
+            <div class="group-body">
+                <div class="cards">
+                    <article class="card" id="inference">
+                        <div class="badge">11</div>
+                        <h3>Inference Strategy</h3>
+                        <p class="lead">Defines how predictions are generated and served.</p>
+                        <ul>
+                            <li><strong>Online:</strong> Online api (FastAPI) for instant prediction.</li>
+                            <li><strong>Batch:</strong> Daily batch scoring for full customer base monitoring.</li>
+                        </ul>
+                    </article>
+                </div>
+                <div class="section-foot">Deploy minimal, reliable infra first: one autoscaling inference service, one batch scheduler.</div>
+            </div>
+        </section>
+
+        <!-- Group: Feedback -->
+        <section class="group" aria-expanded="false">
+            <div class="group-header" tabindex="0">
+                <div class="meta">
+                    <div>
+                        <div class="group-title">Feedback</div>
+                        <div class="group-sub">Sources of feedback and iteration process</div>
+                    </div>
+                </div>
+                <div class="chev">▾</div>
+            </div>
+
+            <div class="group-body">
+                <div class="cards">
+                    <article class="card" id="feedback">
+                        <div class="badge">12</div>
+                        <h3>Feedback Sources</h3>
+                        <p class="lead">How we receive feedback and incorporate it into the next iteration.</p>
+                        <ul>
+                            <li><strong>Data Collection:</strong> Batch inference captures customer data (usage, billing, and interaction) to detect behavioral patterns related to churn.</li>
+                            <li><strong>Storage & Accessibility:</strong> Data is securely stored in databases, data warehouses, or feature stores to support real-time prediction, monitoring, and analysis.</li>
+                            <li><strong>Retraining Loop:</strong> Label confidence tagging and replayable label pipelines ensure reliable data feedback for ongoing model retraining and performance refinement.</li>
+                        </ul>
+                    </article>
+                </div>
+                <div class="section-foot">Label confidence tagging and replayable label pipelines are critical for reliable retraining.</div>
+            </div>
+        </section>
+
+        <!-- Group: Feasibility -->
+        <section class="group" aria-expanded="false">
+            <div class="group-header" tabindex="0">
+                <div class="meta">
+                    <div>
+                        <div class="group-title">Feasibility</div>
+                        <div class="group-sub">Required resources and feasibility assessment</div>
+                    </div>
+                </div>
+                <div class="chev">▾</div>
+            </div>
+
+            <div class="group-body">
+                <div class="cards">
+                    <article class="card" id="feasibility">
+                        <div class="badge">13</div>
+                        <h3>Feasibility & Risks</h3>
+                        <p class="lead">How feasible is our solution and do we have the required resources.</p>
+                        <ul>
+                            <li><strong>Feasible:</strong>  Sufficient historical churn data is available to train and validate models.</li>
+                            <li><strong>Infrastructure:</strong>Uses Docker, Azure Cloud Services, REST API, Github Actions, DVC, Prometheus and Grafana.</li>
+                            <li><strong>Team:</strong> Three-person team responsible for handling development, deployment, and monitoring</li>
+                        </ul>
+                    </article>
+                </div>
+                <div class="section-foot">Prioritize feasibility assessment and ensure resources align with MVP delivery.</div>
+            </div>
+        </section>
+
+        <!-- Group: Project -->
+        <section class="group" aria-expanded="false">
+            <div class="group-header" tabindex="0">
+                <div class="meta">
+                    <div>
+                        <div class="group-title">Project</div>
+                        <div class="group-sub">Team members, deliverables and timeline</div>
+                    </div>
+                </div>
+                <div class="chev">▾</div>
+            </div>
+
+            <div class="group-body">
+                <div class="cards">
+                    <article class="card" id="team">
+                        <div class="badge">14</div>
+                        <h3>Team & Timeline</h3>
+                        <p class="lead">Required team members and projected timeline.</p>
+                        <ul>
+                            <li><strong>Team (3 people):</strong>
+                                <ul>
+                                   <li>Wycliff Nzomo (ML Engineer),</li>
+                                   <li>Aderonke Ajefolakemi (Data Engineer), </li>
+                                   <li>Jordan Buwa (DevOps/Backend Engineer).</li>
+                                </ul> 
+                            </li>
+                            <li><strong>Timeline (3 weeks):</strong>
+                                <ul>
+                                    <li>Day 1-5: Data integration, schema & validation, feature store prototype.</li>
+                                    <li>Day 6-10: Model training & offline evaluation; experiment tracking setup.</li>
+                                    <li>Day 10-15: API service for online inference, Dockerization, tests.</li>
+                                    <li>Day 15-20: CI/CD pipelines, monitoring, canary deployment, A/B test launch.</li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </article>
+                </div>
+                <div class="section-foot">Core people involve in the project.</div>
+            </div>
+        </section>
+
+        <footer style="margin-top:20px; text-align:center; color:#6b7785; font-size:0.92rem;">
+            <div>Real-Time Customer Churn Prediction System — ML Canvas • v1.0 </div>
+            <div style="margin-top:6px;">Tip: Click any group header to expand and view the cards. Cards are interactive and can be edited to match implementation details.</div>
+        </footer>
+    </div>
+
+    <script>
+        // Collapsible groups: collapsed by default
+        document.querySelectorAll('.group').forEach(group => {
+            const header = group.querySelector('.group-header');
+            const body = group.querySelector('.group-body');
+            const chev = group.querySelector('.chev');
+
+            // Ensure collapsed initial state
+            group.setAttribute('aria-expanded', 'false');
+            body.style.display = 'none';
+            chev.classList.remove('rotate');
+
+            const toggle = () => {
+                const expanded = group.getAttribute('aria-expanded') === 'true';
+                group.setAttribute('aria-expanded', String(!expanded));
+
+                if (expanded) {
+                    // collapse
+                    body.style.display = 'none';
+                    chev.classList.remove('rotate');
+                } else {
+                    // expand
+                    body.style.display = 'block';
+                    chev.classList.add('rotate');
+                }
+            };
+
+            header.addEventListener('click', toggle);
+            header.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggle();
+                }
+            });
+
+            // Accessibility: swap chevron glyph when expanded via script
+            const observer = new MutationObserver(() => {
+                chev.textContent = group.getAttribute('aria-expanded') === 'true' ? '▴' : '▾';
+            });
+            observer.observe(group, { attributes: true, attributeFilter: ['aria-expanded'] });
+        });
+
+        // Optional: make cards clickable for subtle focus/active transform
+        document.querySelectorAll('.card').forEach(card => {
+            card.addEventListener('click', () => {
+                card.style.transform = 'translateY(-6px) scale(1.01)';
+                setTimeout(() => { card.style.transform = ''; }, 220);
+            });
+        });
+    </script>
+</body>
+</html>
