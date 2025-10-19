@@ -32,8 +32,11 @@ jobs:
       - name: Push updated data to DVC remote
         if: github.event_name == 'push'
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
           dvc add data/raw
           dvc push
-          git add data/raw.dvc
+          git add data/raw.dvc dvc.lock
           git commit -m "Auto: Update DVC data"
           git push
