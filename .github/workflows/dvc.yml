@@ -1,0 +1,40 @@
+name: DVC Sync
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  sync-data:
+    runs-on: ubuntu-latest
+
+    env:
+      AZURE_STORAGE_ACCOUNT_NAME: ${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}
+      AZURE_STORAGE_SAS_TOKEN: ${{ secrets.AZURE_STORAGE_SAS_TOKEN }}
+      # or AZURE_CONNECTION_STRING if you prefer
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install DVC + Azure support
+        run: |
+          pip install dvc[azure]
+
+      - name: Pull data from DVC remote
+        run: |
+          dvc pull
+
+      - name: Push updated data to DVC remote
+        if: github.event_name == 'push'
+        run: |
+          dvc add data/raw
+          dvc push
+          git add data/raw.dvc
+          git commit -m "Auto: Update DVC data"
+          git push
