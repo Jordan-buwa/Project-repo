@@ -1,0 +1,5 @@
+[core]
+    remote = azureblob
+['remote "azureblob"']
+    url = azure://dvc-remote/churn_data
+    account_name = dvcchurnstorage
