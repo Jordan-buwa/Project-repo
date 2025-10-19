@@ -1,4 +1,0 @@
-[core]
-    remote = azureblob
-['remote "azureblob"']
-    url = azure://dvc-storage/churn_data
