@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          token: ${{secrets.GITHUB_TOKEN}}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -37,6 +39,11 @@ jobs:
 
           dvc add data/raw
           dvc push
-          git add data/raw.dvc dvc.lock
-          git commit -m "Auto: Update DVC data" || echo "No changes to commit"
-          git push
+
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git add data/raw.dvc dvc.lock
+            git commit -m "Auto: Update DVC data"
+            git push
+          else
+            echo "✅ No data changes detected — skipping commit."
+          fi
