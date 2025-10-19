@@ -38,5 +38,5 @@ jobs:
           dvc add data/raw
           dvc push
           git add data/raw.dvc dvc.lock
-          git commit -m "Auto: Update DVC data"
+          git commit -m "Auto: Update DVC data" || echo "No changes to commit"
           git push
