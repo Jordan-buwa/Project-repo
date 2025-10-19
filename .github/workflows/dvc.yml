@@ -1,19 +1,12 @@
-name: Smart DVC Pipeline
+name: DVC Sync
 
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'data/**/*.dvc'
-      - 'dvc.lock'
-      - 'src/ingestion/**'
-  workflow_dispatch:
 
 jobs:
-  dvc-pipeline:
+  sync-data:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     env:
       AZURE_STORAGE_ACCOUNT_NAME: ${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}
@@ -23,7 +16,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{secrets.GITHUB_TOKEN}}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -31,26 +24,26 @@ jobs:
           python-version: '3.12'
 
       - name: Install DVC + Azure support
-        run: pip install dvc[azure]
-
-      - name: Check if DVC data changed
-        id: data_check
         run: |
-          if dvc status -c | grep -q 'changed:'; then
-            echo "data_changed=true" >> $GITHUB_ENV
-          else
-            echo "data_changed=false" >> $GITHUB_ENV
-          fi
+          pip install dvc[azure]
 
-      - name: Run DVC pipeline
-        if: env.data_changed == 'true'
+      - name: Pull data from DVC remote
         run: |
-          echo "📦 Data changed — running pipeline..."
           dvc pull
-          dvc repro
-          dvc push
-        continue-on-error: false
 
-      - name: Skip pipeline if no changes
-        if: env.data_changed == 'false'
-        run: echo "✅ No data changes detected — skipping pipeline."
+      - name: Push updated data to DVC remote
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          dvc add data/raw
+          dvc push
+
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git add data/raw.dvc dvc.lock
+            git commit -m "Auto: Update DVC data"
+            git push
+          else
+            echo "✅ No data changes detected — skipping commit."
+          fi
