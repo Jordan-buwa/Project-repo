@@ -230,5 +230,3 @@ if __name__ == "__main__":
     ingestion = DataIngestion(CONFIG_PATH)
     df = ingestion.load_data()
     print(f"Ingested {len(df)} records from {ingestion.source_type}")
-ingest.py
-Displaying ingest.py.
