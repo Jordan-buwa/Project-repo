@@ -1,0 +1,55 @@
+# Data Ingestion Configuration
+
+data_source:
+  # Type of data source
+  # Options: csv | database 
+  type: "csv"
+
+# CSV Source (for offline / Kaggle datasets)
+csv:
+  path: "data/raw/cell2cell-duke univeristy.csv"
+  test_path: 
+  delimiter: ","
+  encoding: "utf-8"
+  has_header: true
+
+# Database Source (for production ingestion)
+
+database:
+  db_config:
+    dialect: "postgresql"
+    driver: "psycopg2"
+    host: "jaw-postgresdb.postgres.database.azure.com"
+    port: 5432
+    database: "postgres"
+    user: "jawpostgresdb"
+    password: "${POSTGRES_PASSWORD}"   # from environment variable
+    sslmode: "require"
+
+  # For query
+  query: "SELECT * FROM customers_test;"
+
+# Storage Configuration
+storage:
+  # Local folder where raw ingested data will be stored
+  output_dir: "data/raw/"
+  backup_dir: "data/backup/"
+  overwrite_existing: false
+  dvc_track: true
+
+# Logging and Error Handling
+logging:
+  log_path: "src/data/logs/ingestion.log"
+  log_level: "INFO"
+  save_failed_batches: true
+  failed_dir: "data/ingestion/failed_batches/"
+
+# Metadata Tracking
+metadata:
+  save_metadata: true
+  path: "data/metadata/data_versions.json"
+  include:
+    - timestamp
+    - source_type
+    - record_count
+    - file_hash

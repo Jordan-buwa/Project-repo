@@ -4,3 +4,7 @@ __pycache__/
 venv/
 .env
 git.sh
+tes.py
+test.py
+push.py
+models/
