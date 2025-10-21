@@ -27,9 +27,9 @@ jobs:
         run: |
           pip install dvc[azure]
 
-      - name: Pull data from DVC remote
-        run: |
-          dvc pull
+#      - name: Pull data from DVC remote
+#        run: |
+#          dvc pull
 
       - name: Push updated data to DVC remote
         if: github.event_name == 'push'
@@ -45,5 +45,5 @@ jobs:
             git commit -m "Auto: Update DVC data"
             git push
           else
-            echo "✅ No data changes detected — skipping commit."
+            echo "No data changes detected — skipping commit."
           fi
