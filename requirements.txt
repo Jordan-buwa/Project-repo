@@ -1,1 +1,9 @@
 dvc[azure]
+requests
+pandas
+sqlalchemy
+psycopg2-binary
+joblib
+numpy
+scikit-learn
+great_expectations

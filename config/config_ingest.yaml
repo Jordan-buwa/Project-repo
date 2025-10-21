@@ -53,5 +53,6 @@ metadata:
     - source_type
     - record_count
     - file_hash
-config_ingest.yaml
-Displaying config_ingest.yaml.
+<<<<<<< HEAD
+=======
+>>>>>>> jordan_branch
