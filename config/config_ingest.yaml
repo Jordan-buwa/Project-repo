@@ -32,7 +32,7 @@ database:
 # Storage Configuration
 storage:
   # Local folder where raw ingested data will be stored
-  output_dir: "data/raw/"
+  output_dir: "data/snapshots/"
   backup_dir: "data/backup/"
   overwrite_existing: false
   dvc_track: true
