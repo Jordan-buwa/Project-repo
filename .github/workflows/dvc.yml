@@ -27,9 +27,9 @@ jobs:
         run: |
           pip install dvc[azure]
 
-#      - name: Pull data from DVC remote
-#        run: |
-#          dvc pull
+      - name: Pull data from DVC remote
+        run: |
+          dvc pull
 
       - name: Push updated data to DVC remote
         if: github.event_name == 'push'
@@ -37,7 +37,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          dvc add data/raw
+          dvc add data/snapshots
           dvc push
 
           if [[ -n "$(git status --porcelain)" ]]; then
