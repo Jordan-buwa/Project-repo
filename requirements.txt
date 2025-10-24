@@ -5,5 +5,11 @@ sqlalchemy
 psycopg2-binary
 joblib
 numpy
+certifi
 scikit-learn
 great_expectations
+ipykernel>=6.5.0
+jupyter-core
+packaging
+tornado>=6.2.0
+traitlets

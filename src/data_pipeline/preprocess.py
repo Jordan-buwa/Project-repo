@@ -48,6 +48,7 @@ class DataPreprocessor:
         self.df["model_change_rate"] = self.df["models"] / (self.df["months"] + 1)
         self.df["overage_ratio"] = self.df["overage"] / (self.df["revenue"] + 1)
         self.logger.info("Derived features added successfully.")
+        self.num_cols += self.config["combined_features"]      
 
     def handle_missing_values(self):
         """Fill missing values for numerical and categorical"""
