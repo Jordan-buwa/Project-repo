@@ -28,9 +28,8 @@ class DataPreprocessor:
         os.makedirs("data/processed", exist_ok=True)
         self.logger = setup_logger("src/data/logs/preprocessing.log")
 
-    # =========================
     # Feature Engineering
-    # =========================
+
     def combine_cols(self):
         """Create derived features"""
         self.df["engagement_index"] = (
@@ -87,9 +86,8 @@ class DataPreprocessor:
         self.df[self.num_cols] = self.scaler.fit_transform(
             self.df[self.num_cols])
 
-    # =========================
     # Save Processed Data
-    # =========================
+
     def save_preprocessed_data(self):
         """Save locally + PostgreSQL snapshot"""
         self.logger.info("Saving processed data...")
@@ -146,9 +144,8 @@ class DataPreprocessor:
                 f"Failed to save processed data to PostgreSQL: {e}")
             raise
 
-    # =========================
     # Preprocessing Pipeline
-    # =========================
+
     def run_preprocessing_pipeline(self):
         """Run the full preprocessing flow"""
         self.logger.info("Starting full preprocessing pipeline...")

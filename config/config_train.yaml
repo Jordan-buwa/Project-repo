@@ -1,10 +1,10 @@
-# Model Training Configuration
-
 logging:
   log_path: "src/data/logs/train_xgboost.log"
   log_level: "INFO"
 
+# DVC-tracked processed data path
 data_path: "data/processed/processed_data.csv"
+
 target_column: "churn"
 
 # XGBoost hyperparameter ranges for tuning
@@ -21,5 +21,4 @@ cv_folds: 5
 test_size: 0.2
 random_state: 42
 
-# Apply SMOTETomek to training data
 apply_smotetomek: true
