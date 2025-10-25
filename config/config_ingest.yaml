@@ -7,7 +7,7 @@ data_source:
 
 # CSV Source (for offline / Kaggle datasets)
 csv:
-  path: "data/raw/cell2cell-duke univeristy.csv"
+  path: "data/raw/telco_churn.csv"
   test_path: 
   delimiter: ","
   encoding: "utf-8"
@@ -32,7 +32,7 @@ database:
 # Storage Configuration
 storage:
   # Local folder where raw ingested data will be stored
-  output_dir: "data/snapshots/"
+  output_dir: "data/raw/"
   backup_dir: "data/backup/"
   overwrite_existing: false
   dvc_track: true
