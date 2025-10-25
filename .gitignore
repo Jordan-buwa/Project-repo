@@ -15,4 +15,5 @@ models/
 data/logs
 .dvc/
 mlruns/
+*.joblib
 

@@ -1,47 +1,36 @@
-import os
-import pandas as pd
-import numpy as np
-import yaml
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from datetime import datetime
-from sqlalchemy import create_engine
-import json
-import logging
-
-
-#  Setup Logging
-def setup_logger(log_path: str, log_level: str = "INFO"):
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    full_log_path = log_path.replace(".log", f"_{timestamp}.log")
-
-    logging.basicConfig(
-        filename=full_log_path,
-        filemode="a",
-        level=getattr(logging, log_level.upper(), logging.INFO),
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )
-    return logging.getLogger(__name__)
-
-
 #  Data Preprocessor Class
+import pandas as pd
+
+
 class DataPreprocessor:
-    def __init__(self, config_path: str = "config/config_process.yaml", data_raw=None):
+    def __init__(self, config_path: str = "config/config_process.yaml", data_raw: pd.DataFrame = None):
+        if data_raw is None:
+            raise ValueError("data_raw (a pandas DataFrame) must be provided.")
+
+        # Load config
         with open(config_path, "r") as file:
             self.config = yaml.safe_load(file)
 
+        # Use provided DataFrame
         self.df = data_raw.copy()
+
+        # Config-based settings
         self.target_col = self.config["target_column"]
         self.num_cols = self.config["numerical_features"]
         self.cat_cols = self.config["categorical_features"]
         self.drop_col = self.config["drop_columns"]
+
+        # For encoding and scaling
         self.label_encoders = {}
         self.scaler = None
 
+        # Create folder for processed data & logging
         os.makedirs("data/processed", exist_ok=True)
         self.logger = setup_logger("src/data/logs/preprocessing.log")
 
-    #  Feature Engineering
+    # =========================
+    # Feature Engineering
+    # =========================
     def combine_cols(self):
         """Create derived features"""
         self.df["engagement_index"] = (
@@ -98,6 +87,9 @@ class DataPreprocessor:
         self.df[self.num_cols] = self.scaler.fit_transform(
             self.df[self.num_cols])
 
+    # =========================
+    # Save Processed Data
+    # =========================
     def save_preprocessed_data(self):
         """Save locally + PostgreSQL snapshot"""
         self.logger.info("Saving processed data...")
@@ -120,7 +112,7 @@ class DataPreprocessor:
             json.dump(artifacts, f, indent=2)
         self.logger.info("Processed data saved locally.")
 
-        # PostgreSQL snapshot
+        # PostgreSQL snapshot (optional)
         try:
             DB_USER = os.getenv("POSTGRES_USER", "jawpostgresdb")
             DB_PASS = os.getenv("POSTGRES_PASSWORD")
@@ -134,7 +126,6 @@ class DataPreprocessor:
 
             snapshot_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             snapshot_table = f"processed_snapshot_{snapshot_id}"
-
             self.df.to_sql(snapshot_table, engine,
                            index=False, if_exists="replace")
 
@@ -146,7 +137,6 @@ class DataPreprocessor:
                 "storage_type": "postgres",
                 "artifact_file": "data/processed/preprocessing_artifacts.json"
             }])
-
             metadata.to_sql("preprocessing_metadata", engine,
                             index=False, if_exists="append")
             self.logger.info(
@@ -156,16 +146,24 @@ class DataPreprocessor:
                 f"Failed to save processed data to PostgreSQL: {e}")
             raise
 
-    # ----------------------------------------------------------
+    # =========================
+    # Preprocessing Pipeline
+    # =========================
     def run_preprocessing_pipeline(self):
-        """Run the entire preprocessing flow"""
+        """Run the full preprocessing flow"""
         self.logger.info("Starting full preprocessing pipeline...")
-        self.combine_cols()                   # Create derived features first
-        self.remove_unnecessary_columns()     # Drop unwanted columns after
-        self.handle_missing_values()          # Handle missing values
-        self.encode_categorical_variables()   # Encode categorical features
-        self.encode_target_variable()         # Encode target
-        self.feature_scaling()                # Scale numerical features
-        self.save_preprocessed_data()         # Save processed data
+        self.combine_cols()
+        self.remove_unnecessary_columns()
+        self.handle_missing_values()
+        self.encode_categorical_variables()
+        self.encode_target_variable()
+        self.feature_scaling()
+        self.save_preprocessed_data()
+
+        if self.df.isnull().any().any():
+            self.logger.error("NaN values detected after preprocessing!")
+            raise ValueError(
+                "Data contains NaNs after preprocessing pipeline.")
+
         self.logger.info("Preprocessing pipeline completed successfully.")
         return self.df

@@ -10,3 +10,4 @@ great_expectations
 pyyaml
 xgboost
 imbalanced-learn
+mlflow
