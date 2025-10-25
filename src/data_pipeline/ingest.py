@@ -58,7 +58,7 @@ class DataIngestion:
         os.makedirs(self.output_dir, exist_ok=True)
 
     def load_data(self) -> pd.DataFrame:
-        """Ingest data based on source type (csv, database, api, kafka)."""
+        """Ingest data based on source type (csv, database)."""
         self.logger.info(f"Starting data ingestion from source: {self.source_type}")
 
         if self.source_type == "csv":

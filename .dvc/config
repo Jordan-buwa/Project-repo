@@ -2,4 +2,5 @@
     remote = azureblob
 ['remote "azureblob"']
     url = azure://dvc-remote/churn_data
-    account_name = dvcchurnstorage
+    connection_timeout = 600
+    read_timeout = 600

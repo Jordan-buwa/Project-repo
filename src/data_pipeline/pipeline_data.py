@@ -1,5 +1,5 @@
-from src.data.ingest import DataIngestion
-from src.data.preprocess import DataPreprocessor
+from src.data_pipeline.ingest import DataIngestion
+from src.data_pipeline.preprocess import DataPreprocessor
 
 if __name__ == "__main__":
     ingestion = DataIngestion("config/config_ingest.yaml")

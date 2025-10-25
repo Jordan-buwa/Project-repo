@@ -39,6 +39,7 @@ class DataPreprocessor:
         self.df["overage_ratio"] = self.df["overage"] / \
             (self.df["revenue"] + 1)
         self.logger.info("Derived features added successfully.")
+        self.num_cols += self.config["combined_features"]      
 
     def remove_unnecessary_columns(self):
         """Drop unneeded columns"""

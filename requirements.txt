@@ -5,6 +5,7 @@ sqlalchemy
 psycopg2-binary
 joblib
 numpy
+certifi
 scikit-learn
 great_expectations
 pyyaml
