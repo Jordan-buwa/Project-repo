@@ -4,7 +4,7 @@ logging:
   log_level: "INFO"
 
 # DVC-tracked output path (processed data)
-output_path: "data/processed/cell2cell_processed.csv"
+output_path: "data/processed/preprocessed.csv"
 
 # Target variable
 target_column: "churn"
