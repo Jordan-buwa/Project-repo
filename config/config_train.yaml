@@ -2,8 +2,7 @@ logging:
   log_path: "src/data/logs/train_xgboost.log"
   log_level: "INFO"
 
-# DVC-tracked processed data path
-data_path: "data/processed/processed_data.csv"
+data_path: "data/processed/preprocessed.csv"
 
 target_column: "churn"
 
