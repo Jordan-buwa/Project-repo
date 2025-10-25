@@ -1,6 +1,30 @@
 #  Data Preprocessor Class
+import os
+import yaml
 import pandas as pd
+import hashlib
+import json
+import logging
+from datetime import datetime
+from sqlalchemy import create_engine
+import requests
+from dotenv import load_dotenv
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+load_dotenv()
 
+#  Setup Logging
+def setup_logger(log_path: str, log_level: str = "INFO"):
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    full_log_path = log_path.replace(".log", f"_{timestamp}.log")
+    
+    logging.basicConfig(
+        filename=full_log_path,
+        filemode="a",
+        level=getattr(logging, log_level.upper(), logging.INFO),
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
+    return logging.getLogger(__name__)
 
 class DataPreprocessor:
     def __init__(self, config_path: str = "config/config_process.yaml", data_raw: pd.DataFrame = None):
