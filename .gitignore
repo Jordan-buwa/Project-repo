@@ -9,7 +9,6 @@ git.sh
 tes.py
 test.py
 push.py
-models/
 .DS_Store
 *.json
 data/logs
