@@ -14,7 +14,7 @@ def setup_logger(log_path: str, log_level: str = "INFO"):
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     full_log_path = log_path.replace(".log", f"_{timestamp}.log")
-    
+
     logging.basicConfig(
         filename=full_log_path,
         filemode="a",
@@ -44,10 +44,20 @@ class DataPreprocessor:
     #  Feature Engineering
     def combine_cols(self):
         """Create derived features"""
-        self.df["engagement_index"] = (self.df["outcalls"] + self.df["incalls"]) / (self.df["months"] + 1)
-        self.df["model_change_rate"] = self.df["models"] / (self.df["months"] + 1)
-        self.df["overage_ratio"] = self.df["overage"] / (self.df["revenue"] + 1)
+        self.df["engagement_index"] = (
+            self.df["outcalls"] + self.df["incalls"]) / (self.df["months"] + 1)
+        self.df["model_change_rate"] = self.df["models"] / \
+            (self.df["months"] + 1)
+        self.df["overage_ratio"] = self.df["overage"] / \
+            (self.df["revenue"] + 1)
         self.logger.info("Derived features added successfully.")
+
+    def remove_unnecessary_columns(self):
+        """Drop unneeded columns"""
+        for col in self.drop_col:
+            if col in self.df.columns:
+                self.df.drop(columns=col, inplace=True)
+                self.logger.info(f"Removed column: {col}")
 
     def handle_missing_values(self):
         """Fill missing values for numerical and categorical"""
@@ -58,7 +68,8 @@ class DataPreprocessor:
 
         for col in self.cat_cols:
             if self.df[col].isnull().any():
-                fill_value = self.df[col].mode()[0] if not self.df[col].mode().empty else "Unknown"
+                fill_value = self.df[col].mode(
+                )[0] if not self.df[col].mode().empty else "Unknown"
                 self.df[col].fillna(fill_value, inplace=True)
 
     def encode_categorical_variables(self):
@@ -80,18 +91,12 @@ class DataPreprocessor:
                 "yes": 1, "no": 0
             }).fillna(0).astype(int)
 
-    def remove_unnecessary_columns(self):
-        """Drop unneeded columns"""
-        for col in self.drop_col:
-            if col in self.df.columns:
-                self.df.drop(columns=col, inplace=True)
-                self.logger.info(f"Removed column: {col}")
-
     def feature_scaling(self):
         """Scale numerical features"""
         self.logger.info("Scaling numerical features...")
         self.scaler = StandardScaler()
-        self.df[self.num_cols] = self.scaler.fit_transform(self.df[self.num_cols])
+        self.df[self.num_cols] = self.scaler.fit_transform(
+            self.df[self.num_cols])
 
     def save_preprocessed_data(self):
         """Save locally + PostgreSQL snapshot"""
@@ -113,13 +118,14 @@ class DataPreprocessor:
 
         with open("data/processed/preprocessing_artifacts.json", "w") as f:
             json.dump(artifacts, f, indent=2)
-        self.logger.info("Processed data save on local...")
+        self.logger.info("Processed data saved locally.")
 
         # PostgreSQL snapshot
         try:
             DB_USER = os.getenv("POSTGRES_USER", "jawpostgresdb")
             DB_PASS = os.getenv("POSTGRES_PASSWORD")
-            DB_HOST = os.getenv("POSTGRES_HOST", "jaw-postgresdb.postgres.database.azure.com")
+            DB_HOST = os.getenv(
+                "POSTGRES_HOST", "jaw-postgresdb.postgres.database.azure.com")
             DB_PORT = os.getenv("POSTGRES_PORT", "5432")
             DB_NAME = os.getenv("POSTGRES_DB", "postgres")
 
@@ -129,7 +135,8 @@ class DataPreprocessor:
             snapshot_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             snapshot_table = f"processed_snapshot_{snapshot_id}"
 
-            self.df.to_sql(snapshot_table, engine, index=False, if_exists="replace")
+            self.df.to_sql(snapshot_table, engine,
+                           index=False, if_exists="replace")
 
             metadata = pd.DataFrame([{
                 "snapshot_id": snapshot_id,
@@ -140,22 +147,25 @@ class DataPreprocessor:
                 "artifact_file": "data/processed/preprocessing_artifacts.json"
             }])
 
-            metadata.to_sql("preprocessing_metadata", engine, index=False, if_exists="append")
-            self.logger.info(f"Snapshot {snapshot_id} stored successfully in PostgreSQL.")
+            metadata.to_sql("preprocessing_metadata", engine,
+                            index=False, if_exists="append")
+            self.logger.info(
+                f"Snapshot {snapshot_id} stored successfully in PostgreSQL.")
         except Exception as e:
-            self.logger.error(f"Failed to save processed data to PostgreSQL: {e}")
+            self.logger.error(
+                f"Failed to save processed data to PostgreSQL: {e}")
             raise
 
     # ----------------------------------------------------------
     def run_preprocessing_pipeline(self):
         """Run the entire preprocessing flow"""
         self.logger.info("Starting full preprocessing pipeline...")
-        self.remove_unnecessary_columns()
-        self.combine_cols()
-        self.handle_missing_values()
-        self.encode_categorical_variables()
-        self.encode_target_variable()
-        self.feature_scaling()
-        self.save_preprocessed_data()
+        self.combine_cols()                   # Create derived features first
+        self.remove_unnecessary_columns()     # Drop unwanted columns after
+        self.handle_missing_values()          # Handle missing values
+        self.encode_categorical_variables()   # Encode categorical features
+        self.encode_target_variable()         # Encode target
+        self.feature_scaling()                # Scale numerical features
+        self.save_preprocessed_data()         # Save processed data
         self.logger.info("Preprocessing pipeline completed successfully.")
         return self.df

@@ -7,3 +7,6 @@ joblib
 numpy
 scikit-learn
 great_expectations
+pyyaml
+xgboost
+imbalanced-learn

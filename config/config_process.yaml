@@ -12,10 +12,10 @@ drop_columns:
   - "customer"
   - "traintest"
   - "churndep"
-  - "overage"
-  - "outcalls"
-  - "incalls"
-  - "models"
+  # - "overage"
+  # - "outcalls"
+  # - "incalls"
+  # - "models"
 
 
 numerical_features:
