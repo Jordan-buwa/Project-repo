@@ -9,7 +9,6 @@ from xgboost import XGBClassifier
 from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, classification_report
 from imblearn.combine import SMOTETomek
-import dvc.api
 import mlflow
 import mlflow.xgboost
 from src.data_pipeline.pipeline_data import fetch_preprocessed
