@@ -1,54 +1,52 @@
-import os
-import pandas as pd
-import numpy as np
-import yaml
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from datetime import datetime
-from sqlalchemy import create_engine
-import json
-import logging
-
-
-#  Setup Logging
-def setup_logger(log_path: str, log_level: str = "INFO"):
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    full_log_path = log_path.replace(".log", f"_{timestamp}.log")
-    
-    logging.basicConfig(
-        filename=full_log_path,
-        filemode="a",
-        level=getattr(logging, log_level.upper(), logging.INFO),
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )
-    return logging.getLogger(__name__)
-
-
 #  Data Preprocessor Class
+import pandas as pd
+
+
 class DataPreprocessor:
-    def __init__(self, config_path: str = "config/config_process.yaml", data_raw=None):
+    def __init__(self, config_path: str = "config/config_process.yaml", data_raw: pd.DataFrame = None):
+        if data_raw is None:
+            raise ValueError("data_raw (a pandas DataFrame) must be provided.")
+
+        # Load config
         with open(config_path, "r") as file:
             self.config = yaml.safe_load(file)
 
+        # Use provided DataFrame
         self.df = data_raw.copy()
+
+        # Config-based settings
         self.target_col = self.config["target_column"]
         self.num_cols = self.config["numerical_features"]
         self.cat_cols = self.config["categorical_features"]
         self.drop_col = self.config["drop_columns"]
+
+        # For encoding and scaling
         self.label_encoders = {}
         self.scaler = None
 
+        # Create folder for processed data & logging
         os.makedirs("data/processed", exist_ok=True)
         self.logger = setup_logger("src/data/logs/preprocessing.log")
 
-    #  Feature Engineering
+    # Feature Engineering
+
     def combine_cols(self):
         """Create derived features"""
-        self.df["engagement_index"] = (self.df["outcalls"] + self.df["incalls"]) / (self.df["months"] + 1)
-        self.df["model_change_rate"] = self.df["models"] / (self.df["months"] + 1)
-        self.df["overage_ratio"] = self.df["overage"] / (self.df["revenue"] + 1)
+        self.df["engagement_index"] = (
+            self.df["outcalls"] + self.df["incalls"]) / (self.df["months"] + 1)
+        self.df["model_change_rate"] = self.df["models"] / \
+            (self.df["months"] + 1)
+        self.df["overage_ratio"] = self.df["overage"] / \
+            (self.df["revenue"] + 1)
         self.logger.info("Derived features added successfully.")
         self.num_cols += self.config["combined_features"]      
+
+    def remove_unnecessary_columns(self):
+        """Drop unneeded columns"""
+        for col in self.drop_col:
+            if col in self.df.columns:
+                self.df.drop(columns=col, inplace=True)
+                self.logger.info(f"Removed column: {col}")
 
     def handle_missing_values(self):
         """Fill missing values for numerical and categorical"""
@@ -59,7 +57,8 @@ class DataPreprocessor:
 
         for col in self.cat_cols:
             if self.df[col].isnull().any():
-                fill_value = self.df[col].mode()[0] if not self.df[col].mode().empty else "Unknown"
+                fill_value = self.df[col].mode(
+                )[0] if not self.df[col].mode().empty else "Unknown"
                 self.df[col].fillna(fill_value, inplace=True)
 
     def encode_categorical_variables(self):
@@ -81,18 +80,14 @@ class DataPreprocessor:
                 "yes": 1, "no": 0
             }).fillna(0).astype(int)
 
-    def remove_unnecessary_columns(self):
-        """Drop unneeded columns"""
-        for col in self.drop_col:
-            if col in self.df.columns:
-                self.df.drop(columns=col, inplace=True)
-                self.logger.info(f"Removed column: {col}")
-
     def feature_scaling(self):
         """Scale numerical features"""
         self.logger.info("Scaling numerical features...")
         self.scaler = StandardScaler()
-        self.df[self.num_cols] = self.scaler.fit_transform(self.df[self.num_cols])
+        self.df[self.num_cols] = self.scaler.fit_transform(
+            self.df[self.num_cols])
+
+    # Save Processed Data
 
     def save_preprocessed_data(self):
         """Save locally + PostgreSQL snapshot"""
@@ -114,13 +109,14 @@ class DataPreprocessor:
 
         with open("data/processed/preprocessing_artifacts.json", "w") as f:
             json.dump(artifacts, f, indent=2)
-        self.logger.info("Processed data save on local...")
+        self.logger.info("Processed data saved locally.")
 
-        # PostgreSQL snapshot
+        # PostgreSQL snapshot (optional)
         try:
             DB_USER = os.getenv("POSTGRES_USER", "jawpostgresdb")
             DB_PASS = os.getenv("POSTGRES_PASSWORD")
-            DB_HOST = os.getenv("POSTGRES_HOST", "jaw-postgresdb.postgres.database.azure.com")
+            DB_HOST = os.getenv(
+                "POSTGRES_HOST", "jaw-postgresdb.postgres.database.azure.com")
             DB_PORT = os.getenv("POSTGRES_PORT", "5432")
             DB_NAME = os.getenv("POSTGRES_DB", "postgres")
 
@@ -129,8 +125,8 @@ class DataPreprocessor:
 
             snapshot_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             snapshot_table = f"processed_snapshot_{snapshot_id}"
-
-            self.df.to_sql(snapshot_table, engine, index=False, if_exists="replace")
+            self.df.to_sql(snapshot_table, engine,
+                           index=False, if_exists="replace")
 
             metadata = pd.DataFrame([{
                 "snapshot_id": snapshot_id,
@@ -140,23 +136,32 @@ class DataPreprocessor:
                 "storage_type": "postgres",
                 "artifact_file": "data/processed/preprocessing_artifacts.json"
             }])
-
-            metadata.to_sql("preprocessing_metadata", engine, index=False, if_exists="append")
-            self.logger.info(f"Snapshot {snapshot_id} stored successfully in PostgreSQL.")
+            metadata.to_sql("preprocessing_metadata", engine,
+                            index=False, if_exists="append")
+            self.logger.info(
+                f"Snapshot {snapshot_id} stored successfully in PostgreSQL.")
         except Exception as e:
-            self.logger.error(f"Failed to save processed data to PostgreSQL: {e}")
+            self.logger.error(
+                f"Failed to save processed data to PostgreSQL: {e}")
             raise
 
-    # ----------------------------------------------------------
+    # Preprocessing Pipeline
+
     def run_preprocessing_pipeline(self):
-        """Run the entire preprocessing flow"""
+        """Run the full preprocessing flow"""
         self.logger.info("Starting full preprocessing pipeline...")
-        self.remove_unnecessary_columns()
         self.combine_cols()
+        self.remove_unnecessary_columns()
         self.handle_missing_values()
         self.encode_categorical_variables()
         self.encode_target_variable()
         self.feature_scaling()
         self.save_preprocessed_data()
+
+        if self.df.isnull().any().any():
+            self.logger.error("NaN values detected after preprocessing!")
+            raise ValueError(
+                "Data contains NaNs after preprocessing pipeline.")
+
         self.logger.info("Preprocessing pipeline completed successfully.")
         return self.df
