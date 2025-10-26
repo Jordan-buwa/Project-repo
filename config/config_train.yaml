@@ -1,5 +1,5 @@
 logging:
-  log_path: "src/data/logs/train_xgboost.log"
+  log_path: "src/data_pipeline/logs/training/train_xgboost.log"
   log_level: "INFO"
 
 data_path: "data/processed/preprocessed.csv"

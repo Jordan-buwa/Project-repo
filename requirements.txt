@@ -12,3 +12,5 @@ pyyaml
 xgboost
 imbalanced-learn
 mlflow
+torch
+optuna

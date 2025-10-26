@@ -185,7 +185,7 @@ if __name__ == "__main__":
 
     logger = setup_logger(
         config["logging"]["log_path"], config["logging"]["log_level"])
-    logger.info("Loading processed data from DVC...")
+    logger.info("Loading preprocessed data...")
 
     df_processed = fetch_preprocessed()
 
@@ -196,7 +196,6 @@ if __name__ == "__main__":
 
     # Train and log model
     trainer = XGBoostTrainer(config=config, logger=logger)
-    trainer.dp = dp  # attach preprocessor for artifact logging
     best_model, fold_metrics = trainer.train_and_tune_model(X, y)
 
     # end

@@ -14,13 +14,14 @@ load_dotenv()
 
 #  Setup Logging
 def setup_logger(log_path: str, log_level: str = "INFO"):
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    full_log_path = log_path.replace(".log", f"_{timestamp}.log")
-    
+    base, ext = os.path.splitext(log_path)
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    log_path_ts = f"{base}_{timestamp}{ext}"
+
+    os.makedirs(os.path.dirname(log_path_ts), exist_ok=True)
     logging.basicConfig(
-        filename=full_log_path,
-        filemode="a",
+        filename=log_path_ts,
+        filemode="a", 
         level=getattr(logging, log_level.upper(), logging.INFO),
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
@@ -42,20 +43,23 @@ class DataPreprocessor:
         self.target_col = self.config["target_column"]
         self.num_cols = self.config["numerical_features"]
         self.cat_cols = self.config["categorical_features"]
-        self.drop_col = self.config["drop_columns"]
+        self.drop_col = self.config["drop_columns"] + ['overage', 'outcalls', 'incalls', 'models']
 
         # For encoding and scaling
         self.label_encoders = {}
         self.scaler = None
 
         # Create folder for processed data & logging
-        os.makedirs("data/processed", exist_ok=True)
-        self.logger = setup_logger("src/data/logs/preprocessing.log")
+        self.logger = setup_logger(
+            self.config["logging"]["log_path"],
+            self.config["logging"]["log_level"]
+        )
 
     # Feature Engineering
 
     def combine_cols(self):
         """Create derived features"""
+        self.logger.info("Creating derived features...")
         self.df["engagement_index"] = (
             self.df["outcalls"] + self.df["incalls"]) / (self.df["months"] + 1)
         self.df["model_change_rate"] = self.df["models"] / \
@@ -67,23 +71,26 @@ class DataPreprocessor:
 
     def remove_unnecessary_columns(self):
         """Drop unneeded columns"""
+        self.logger.info("Dropping unnecessary columns...")
         for col in self.drop_col:
             if col in self.df.columns:
                 self.df.drop(columns=col, inplace=True)
                 self.logger.info(f"Removed column: {col}")
+        self.num_cols = [col for col in self.num_cols if col not in self.drop_col]
+        self.cat_cols = [col for col in self.cat_cols if col not in self.drop_col]
 
     def handle_missing_values(self):
         """Fill missing values for numerical and categorical"""
         self.logger.info("Handling missing values...")
         for col in self.num_cols:
             if self.df[col].isnull().any():
-                self.df[col].fillna(self.df[col].median(), inplace=True)
+                self.df.fillna({col : self.df[col].median()}, inplace=True)
 
         for col in self.cat_cols:
             if self.df[col].isnull().any():
                 fill_value = self.df[col].mode(
                 )[0] if not self.df[col].mode().empty else "Unknown"
-                self.df[col].fillna(fill_value, inplace=True)
+                self.df.fillna({col : fill_value}, inplace=True)
 
     def encode_categorical_variables(self):
         """Encode categorical features"""
@@ -134,8 +141,12 @@ class DataPreprocessor:
         with open("data/processed/preprocessing_artifacts.json", "w") as f:
             json.dump(artifacts, f, indent=2)
         self.logger.info("Processed data saved locally.")
+        #self.logger.info("Saving processed data to PostgreSQL...")
+        #self.database_save()
 
-        # PostgreSQL snapshot (optional)
+
+    def database_save(self):
+                # PostgreSQL snapshot (optional)
         try:
             DB_USER = os.getenv("POSTGRES_USER", "jawpostgresdb")
             DB_PASS = os.getenv("POSTGRES_PASSWORD")
@@ -168,12 +179,13 @@ class DataPreprocessor:
             self.logger.error(
                 f"Failed to save processed data to PostgreSQL: {e}")
             raise
-
     # Preprocessing Pipeline
 
     def run_preprocessing_pipeline(self):
         """Run the full preprocessing flow"""
+
         self.logger.info("Starting full preprocessing pipeline...")
+        print("Starting full preprocessing pipeline...")
         self.combine_cols()
         self.remove_unnecessary_columns()
         self.handle_missing_values()
@@ -188,4 +200,5 @@ class DataPreprocessor:
                 "Data contains NaNs after preprocessing pipeline.")
 
         self.logger.info("Preprocessing pipeline completed successfully.")
+        print("Preprocessing pipeline completed successfully.")
         return self.df

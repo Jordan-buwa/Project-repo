@@ -13,9 +13,13 @@ load_dotenv()
 # Utility Functions
 
 def setup_logger(log_path: str, log_level: str = "INFO"):
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    base, ext = os.path.splitext(log_path)
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    log_path_ts = f"{base}_{timestamp}{ext}"
+
+    os.makedirs(os.path.dirname(log_path_ts), exist_ok=True)
     logging.basicConfig(
-        filename=log_path,
+        filename=log_path_ts,
         filemode="a", 
         level=getattr(logging, log_level.upper(), logging.INFO),
         format="%(asctime)s - %(levelname)s - %(message)s",
