@@ -74,7 +74,7 @@ class DataIngestion:
 
         # Save raw snapshot
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(self.output_dir, f"{self.config["file_name"]}_{timestamp}.csv")
+        output_file = os.path.join(self.output_dir, f"{self.config['file_name']}_{timestamp}.csv")
         df.to_csv(output_file, index=False)
         self.logger.info(f"Data snapshot saved: {output_file}")
 
