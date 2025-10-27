@@ -40,7 +40,7 @@ with open("config/config_train_rf.yaml", "r") as f:
 #    process_config = yaml.safe_load(f)
 
 TARGET_COL = train_config["data"]["target_column"]
-MODEL_DIR = train_config["output"]["model_dir"] if "output" in train_config else "models"
+MODEL_DIR = train_config["output"]["model_dir"] if "output" in train_config else "models/"
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 # Loading and validating preprocessed data

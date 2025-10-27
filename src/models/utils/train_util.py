@@ -1,8 +1,17 @@
 import torch
+from src.data_pipeline.ingest import setup_logger
+import os
+import logging
+from datetime import datetime
 
-def train_model(model, train_loader, criterion, optimizer, num_epochs=20, device='cpu'):
+def train_model(model, train_loader, criterion, optimizer, num_epochs=20, device='cpu', model_name = "Neural_Network"):
     model.to(device)
     model.train()
+    os.makedirs("src/models/utils/logs", exist_ok=True)
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    path = f"src/models/utils/logs/train_{timestamp}.log"
+    logging = setup_logger(path, "INFO")
+    logging.info(f"Starting training for {model_name} for {num_epochs} epochs on {device}")
     for epoch in range(num_epochs):
         running_loss = 0.0
         for batch_x, batch_y in train_loader:
