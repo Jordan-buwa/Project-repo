@@ -1,0 +1,22 @@
+name: Simple CI/CD workflow
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - main
+
+jobs:
+    health-check:
+        runs-on: ubuntu-latest
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v3
+
+        - name: Check file structure
+          run: | 
+            echo "Checking file structure..."
+            ls -la
+            echo "File structure check: OK"
