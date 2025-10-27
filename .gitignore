@@ -12,7 +12,6 @@ push.py
 .DS_Store
 *.json
 data/logs
-.dvc/
 mlruns/
 *.joblib
 

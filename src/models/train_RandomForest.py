@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 with open("config/config_train_rf.yaml", "r") as f:
     train_config = yaml.safe_load(f)
 
-with open("config/config_process.yaml", "r") as f:
-    process_config = yaml.safe_load(f)
+#with open("config/config_process.yaml", "r") as f:
+#    process_config = yaml.safe_load(f)
 
 TARGET_COL = train_config["data"]["target_column"]
 MODEL_DIR = train_config["output"]["model_dir"] if "output" in train_config else "models"
@@ -47,6 +47,8 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 # processed_path = process_config["output_path"]
 # df_raw = pd.read_csv(processed_path)
 # df = validate_dataframe(df_raw, "config/config_process.yaml")
+#processed_path = process_config["output_path"]
+#df_raw = pd.read_csv(processed_path)
 df = fetch_preprocessed()
 
 X = df.drop(columns=[TARGET_COL])
