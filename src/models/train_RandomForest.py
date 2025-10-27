@@ -1,5 +1,6 @@
 import os
 import yaml
+from dotenv import load_dotenv
 import pandas as pd
 import numpy as np
 import mlflow
@@ -14,7 +15,7 @@ from imblearn.combine import SMOTETomek
 from dotenv import load_dotenv
 
 # Importing dataframe validation function
-from src.data_pipeline.validate_after_preprocess import validate_dataframe
+from src.data_pipeline.pipeline_data import fetch_preprocessed
 
 # Loading environment variables
 load_dotenv()
@@ -43,9 +44,10 @@ MODEL_DIR = train_config["output"]["model_dir"] if "output" in train_config else
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 # Loading and validating preprocessed data
-processed_path = process_config["output_path"]
-df_raw = pd.read_csv(processed_path)
-df = validate_dataframe(df_raw, "config/config_process.yaml")
+# processed_path = process_config["output_path"]
+# df_raw = pd.read_csv(processed_path)
+# df = validate_dataframe(df_raw, "config/config_process.yaml")
+df = fetch_preprocessed()
 
 X = df.drop(columns=[TARGET_COL])
 y = df[TARGET_COL]
