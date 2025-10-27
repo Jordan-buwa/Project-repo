@@ -74,7 +74,7 @@ class DataIngestion:
 
         # Save raw snapshot
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(self.output_dir, f"snapshot_{timestamp}.csv")
+        output_file = os.path.join(self.output_dir, f"{self.config["file_name"]}_{timestamp}.csv")
         df.to_csv(output_file, index=False)
         self.logger.info(f"Data snapshot saved: {output_file}")
 
@@ -139,6 +139,7 @@ class DataIngestion:
                     encoding=cfg.get("encoding", "utf-8")
                 )
                 self.logger.info(f"Loaded {len(df)} records from {single_path}")
+                print(f"Loaded {len(df)} records from {single_path}")
                 return df
             except Exception as e:
                 self.logger.error(f"CSV ingestion failed for {single_path}: {e}")
