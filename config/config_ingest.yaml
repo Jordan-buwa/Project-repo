@@ -13,6 +13,7 @@ csv:
   encoding: "utf-8"
   has_header: true
 
+file_name: "telco_churn"
 # Database Source (for production ingestion)
 
 database:
@@ -32,7 +33,7 @@ database:
 # Storage Configuration
 storage:
   # Local folder where raw ingested data will be stored
-  output_dir: "data/raw/"
+  output_dir: "data/snapshots/"
   backup_dir: "data/backup/"
   overwrite_existing: false
   dvc_track: true

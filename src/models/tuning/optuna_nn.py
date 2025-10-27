@@ -8,12 +8,18 @@ from imblearn.over_sampling import SMOTE
 import optuna
 import logging
 from sklearn.impute import SimpleImputer
-
+import os
 from src.models.train_NN.neural_net import ChurnNN
 from src.models.utils.train_util import train_model
 from src.models.utils.eval_nn import evaluate_model
 
 def objective(trial, X, y, device):
+    os.makedirs("src/models/logs", exist_ok=True)
+    logging.basicConfig(
+    filename="src/models/logs/optuna_tuning.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
     logger = logging.getLogger(__name__)
     n_layers = trial.suggest_int('n_layers', 1, 4)
     n_units = [trial.suggest_int(f'n_units_{i}', 32, 256, step=32) for i in range(n_layers)]
@@ -25,6 +31,7 @@ def objective(trial, X, y, device):
     smote = SMOTE(random_state=42)
     auc_scores = []
 
+    
     for train_idx, test_idx in skf.split(X, y):
         X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
         X_test, y_test = X.iloc[test_idx], y.iloc[test_idx]

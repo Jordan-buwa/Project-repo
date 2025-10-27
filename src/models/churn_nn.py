@@ -8,8 +8,12 @@ from imblearn.over_sampling import SMOTE
 import numpy as np
 from src.data_pipeline.pipeline_data import fetch_preprocessed
 import yaml
+import os
 from src.data_pipeline.ingest import setup_logger
+from dotenv import load_dotenv
+load_dotenv()
 
+MODEL_DIR = os.getenv("MODEL_DIR", "models/")
 df_processed = fetch_preprocessed()
 
 
@@ -30,7 +34,10 @@ y = df_processed[target_col]
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Run Optuna optimization
+logger.info("Starting hyperparameter optimization with Optuna...")
 study = run_optuna_optimization(X, y, n_trials=20, device=device)
+logger.info(f"Hyperparameter optimization completed!\nBest Hyperparameters: {study.best_params}\nBest AUC-ROC: {study.best_value:.4f}")
+
 print("\nBest Hyperparameters:", study.best_params)
 print(f"Best AUC-ROC: {study.best_value:.4f}")
 
@@ -47,6 +54,7 @@ smote = SMOTE(random_state=42)
 
 metrics_all = {"AUC": [], "F1": [], "Recall": [], "Precision": [], "Accuracy": []}
 
+logger.info("Training final model with cross-validation...")
 for fold, (train_idx, test_idx) in enumerate(skf.split(X, y)):
     X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
     X_test, y_test = X.iloc[test_idx], y.iloc[test_idx]
@@ -73,8 +81,11 @@ for fold, (train_idx, test_idx) in enumerate(skf.split(X, y)):
 
 # Print final average results
 print("\nFinal Average Metrics:")
+logger.info("Final Average Metrics:")
 for k, v in metrics_all.items():
     print(f"{k}: {np.mean(v):.4f} ± {np.std(v):.4f}")
+    logger.info(f"{k}: {np.mean(v):.4f} ± {np.std(v):.4f}")
 
-torch.save(model.state_dict(), "churn_model_with_optuna.pth")
+path = MODEL_DIR + "churn_model_with_optuna.pth"
+torch.save(model.state_dict(), path)
 print("Model saved.")
