@@ -1,5 +1,6 @@
 import os
 import yaml
+from dotenv import load_dotenv
 import pandas as pd
 import numpy as np
 import mlflow
@@ -43,6 +44,9 @@ MODEL_DIR = train_config["output"]["model_dir"] if "output" in train_config else
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 # Loading and validating preprocessed data
+# processed_path = process_config["output_path"]
+# df_raw = pd.read_csv(processed_path)
+# df = validate_dataframe(df_raw, "config/config_process.yaml")
 #processed_path = process_config["output_path"]
 #df_raw = pd.read_csv(processed_path)
 df = fetch_preprocessed()
