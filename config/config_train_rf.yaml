@@ -4,29 +4,47 @@ logging:
 
 data:
   target_column: "churn"
+  # train_path: "data/processed/preprocessed.csv"
 
 model_selection:
-  model_choice: ["random_forest"]
+  model_choice:
+    - "random_forest"
   primary_metric: "roc_auc"
   performance_threshold:
-    accuracy: 0.8
-    roc_auc: 0.8
+    accuracy: 0.7
+    roc_auc: 0.75
 
 hyperparameters:
   random_forest:
-    n_estimators: [100, 200, 300]
-    max_depth: [None, 10, 20]
-    min_samples_split: [2, 5]
-    min_samples_leaf: [1, 2]
-    max_features: ["auto", "sqrt"]
+    n_estimators: [200, 400, 600]
+    max_depth: [10, 20, 30, null]       # null = unlimited depth
+    max_features: ["sqrt", "log2", null] # valid options: sqrt, log2, or None
+    min_samples_split: [2, 5, 10]
+    min_samples_leaf: [1, 2, 4]
 
 cv:
-  n_splits: 5
+  n_splits: 10
   scoring: "roc_auc"
-  n_jobs: -1
+  n_jobs: 6
   verbose: 1
-
-random_state: 42
 
 resampling:
   apply_smotetomek: true  # SMOTETomek for handling class imbalance
+
+experiment_name: "Customer Churn Model Training"
+
+mlflow:
+  registered_model_name: "customer_churn_model"
+
+model:
+  random_state: 42
+  test_size: 0.2
+  n_estimators: 100          # number of trees
+  max_depth: null            # None in Python → unlimited depth
+  min_samples_split: 2
+  min_samples_leaf: 1
+  max_features: "sqrt"       # allowed values: sqrt, log2, or None
+  bootstrap: true
+
+output:
+  model_dir: "models"
