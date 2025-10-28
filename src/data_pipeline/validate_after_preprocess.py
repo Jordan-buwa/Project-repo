@@ -50,6 +50,30 @@ def validate_dataframe(df: pd.DataFrame, config_path: str) -> pd.DataFrame:
         logging.error(msg)
         raise ValueError(msg)
 
+     # Target column validation
+    if target_col:
+        target_col = target_col.strip().lower()
+        if target_col not in df.columns:
+            msg = f"Target column '{target_col}' not found in dataframe columns"
+            logging.error(msg)
+            raise ValueError(msg)
+
+        if df[target_col].isnull().any():
+            msg = f"Target column '{target_col}' contains null values"
+            logging.error(msg)
+            raise ValueError(msg)
+
+        if df[target_col].nunique() < 2:
+            msg = f"Target column '{target_col}' must have at least two unique values"
+            logging.error(msg)
+            raise ValueError(msg)
+
+        # Imbalance warning
+        value_counts = df[target_col].value_counts(normalize=True)
+        if value_counts.max() > 0.95:
+            logging.warning(
+                f"Target column '{target_col}' is highly imbalanced: {value_counts.to_dict()}"
+            )
     for col in df.columns:
         col_schema = schema[col]
         col_dtype = col_schema.get("dtype")
@@ -114,7 +138,7 @@ def validate_dataframe(df: pd.DataFrame, config_path: str) -> pd.DataFrame:
 
     df = df[[c for c in expected_cols_lower if c in df.columns]]
 
-    msg = f"Validation successful: {df.shape[0]} rows × {df.shape[1]} columns"
+    msg = f"Validation successful: {df.shape[0]} rows {df.shape[1]} columns"
     logging.info(msg)
     print(msg)
     return df
