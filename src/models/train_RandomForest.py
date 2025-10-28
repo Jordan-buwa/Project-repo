@@ -12,18 +12,22 @@ from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from sklearn.ensemble import RandomForestClassifier
 from imblearn.combine import SMOTETomek
-from dotenv import load_dotenv
+import warnings
 
 # Importing dataframe validation function
 from src.data_pipeline.pipeline_data import fetch_preprocessed
 
+# Suppressing unnecessary warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 # Loading environment variables
 load_dotenv()
-MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI")
+MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
 AZURE_CONN_STR = os.getenv("AZURE_CONN_STR")
 AZURE_CONTAINER_NAME = os.getenv("AZURE_CONTAINER_NAME")
 
-# Logging Setup
+# Logging setup
 os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     filename="logs/train_rf.log",
@@ -32,52 +36,49 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Loading Configs
+# Loading training config
 with open("config/config_train_rf.yaml", "r") as f:
     train_config = yaml.safe_load(f)
 
-#with open("config/config_process.yaml", "r") as f:
-#    process_config = yaml.safe_load(f)
-
 TARGET_COL = train_config["data"]["target_column"]
-MODEL_DIR = train_config["output"]["model_dir"] if "output" in train_config else "models/"
+MODEL_DIR = train_config["output"]["model_dir"] if "output" in train_config else "models"
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 # Loading and validating preprocessed data
-# processed_path = process_config["output_path"]
-# df_raw = pd.read_csv(processed_path)
-# df = validate_dataframe(df_raw, "config/config_process.yaml")
-#processed_path = process_config["output_path"]
-#df_raw = pd.read_csv(processed_path)
 df = fetch_preprocessed()
+if TARGET_COL.lower() not in df.columns.str.strip().str.lower():
+    raise ValueError(f"Target column '{TARGET_COL}' not found. Available columns: {list(df.columns)}")
 
 X = df.drop(columns=[TARGET_COL])
 y = df[TARGET_COL]
 logger.info("Validated preprocessed data loaded successfully. Ready for training.")
 
-# MLflow Setup
+# MLflow setup
+if not MLFLOW_URI:
+    raise ValueError("MLFLOW_TRACKING_URI not found in .env")
 mlflow.set_tracking_uri(MLFLOW_URI)
 mlflow.set_experiment("Customer Churn Model Training")
 logger.info(f"MLflow tracking URI: {MLFLOW_URI}")
 
-# Defining Models
+# Defining models
 available_models = {
-    "random_forest": RandomForestClassifier(random_state=train_config["random_state"]),
+    "random_forest": RandomForestClassifier(random_state=train_config["model"]["random_state"])
 }
 
-# Resampler setup (SMOTETomek)
+# Resampler setup
 apply_smotetomek = train_config.get("resampling", {}).get("apply_smotetomek", False)
-smote_sampler = SMOTETomek(random_state=train_config["random_state"]) if apply_smotetomek else None
+smote_sampler = SMOTETomek(random_state=train_config["model"]["random_state"]) if apply_smotetomek else None
 
 # Model evaluation function
-def evaluate_models(X, y, config):
-    model_names = config["model_selection"]["model_choice"]
-    thresholds = config["model_selection"]["performance_threshold"]
-    primary_metric = config["model_selection"]["primary_metric"]
+def evaluate_models(X, y, train_config):
+    model_names = train_config["model_selection"]["model_choice"]
+    thresholds = train_config["model_selection"]["performance_threshold"]
+    primary_metric = train_config["model_selection"]["primary_metric"]
 
     skf = StratifiedKFold(
-        n_splits=config["cv"]["n_splits"], shuffle=True, random_state=config["random_state"]
+        n_splits=train_config["cv"]["n_splits"], shuffle=True, random_state=train_config["model"]["random_state"]
     )
+
     best_models = {}
 
     for name in model_names:
@@ -86,15 +87,17 @@ def evaluate_models(X, y, config):
             continue
 
         model = available_models[name]
-        param_grid = config["hyperparameters"].get(name, {})
+        param_grid = train_config["hyperparameters"].get(name, {})
 
         grid = GridSearchCV(
             estimator=model,
             param_grid=param_grid,
-            scoring=config["cv"]["scoring"],
+            scoring=train_config["cv"]["scoring"],
             cv=skf,
-            n_jobs=config["cv"]["n_jobs"],
-            verbose=config["cv"]["verbose"]
+            n_jobs=train_config["cv"]["n_jobs"],
+            verbose=train_config["cv"]["verbose"],
+            pre_dispatch="2*n_jobs",
+            error_score='raise'
         )
 
         with mlflow.start_run(run_name=f"{name}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"):
@@ -113,7 +116,6 @@ def evaluate_models(X, y, config):
                     X_train_res, y_train_res = X_train, y_train
 
                 best_model.fit(X_train_res, y_train_res)
-
                 y_pred = best_model.predict(X_test)
                 y_prob = best_model.predict_proba(X_test)[:, 1] if hasattr(best_model, "predict_proba") else y_pred
 
@@ -128,37 +130,34 @@ def evaluate_models(X, y, config):
 
             avg_metrics = {k: np.mean([m[k] for m in fold_metrics]) for k in fold_metrics[0]}
             mlflow.log_metrics(avg_metrics)
-            mlflow.sklearn.log_model(best_model, artifact_path="model")
 
+            # Store only best models passing thresholds
             if all(avg_metrics[m] >= t for m, t in thresholds.items()):
                 best_models[name] = (best_model, avg_metrics)
-                local_path = os.path.join(MODEL_DIR, f"{name}_model.pkl")
-                joblib.dump(best_model, local_path)
-                logger.info(f"Model {name} passed thresholds and saved at {local_path}")
+                logger.info(f"Model {name} passed thresholds: {avg_metrics}")
             else:
                 logger.warning(f"Model {name} did not meet thresholds: {avg_metrics}")
 
-    if not best_models:
-        logger.warning("No model met the performance thresholds.")
-        return None, None, None
+    if best_models:
+        best_model_name = max(
+            best_models,
+            key=lambda n: best_models[n][1][primary_metric]
+        )
+        return best_model_name, best_models[best_model_name][0], best_models[best_model_name][1]
 
-    if len(best_models) == 1:
-        name = list(best_models.keys())[0]
-        return name, best_models[name][0], best_models[name][1]
+    return None, None, None
 
-    best_model_name = max(best_models, key=lambda n: best_models[n][1][primary_metric])
-    return best_model_name, best_models[best_model_name][0], best_models[best_model_name][1]
-
-# Running Training
+# Run evaluation
 best_model_name, best_model, best_metrics = evaluate_models(X, y, train_config)
 
-# Saving Best Model Locally
+# Save & log best model
 if best_model_name:
     local_model_path = os.path.join(MODEL_DIR, f"{best_model_name}.joblib")
     joblib.dump(best_model, local_model_path)
     logger.info(f"Best model saved locally at: {local_model_path}")
+    mlflow.sklearn.log_model(best_model, name="model", input_example=X.iloc[:5])
 
-# Azure best model Uploading
+# Azure upload
 if best_model_name and AZURE_CONN_STR and AZURE_CONTAINER_NAME:
     try:
         from azure.storage.blob import BlobServiceClient
@@ -173,4 +172,4 @@ if best_model_name and AZURE_CONN_STR and AZURE_CONTAINER_NAME:
         except Exception:
             logger.warning(f"Azure container '{AZURE_CONTAINER_NAME}' does not exist. Skipping upload.")
     except Exception as e:
-        logger.error(f"Azure upload failed for {best_model_name}: {e}")
+        logger.exception(f"Azure upload failed for {best_model_name}: {e}")
