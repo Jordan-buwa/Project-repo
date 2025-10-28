@@ -13,7 +13,10 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from sklearn.ensemble import RandomForestClassifier
 from imblearn.combine import SMOTETomek
 import warnings
+<<<<<<< HEAD
 import subprocess
+=======
+>>>>>>> ed862b2b0c5d6b4ad459fa709457b0702429c89a
 
 # Importing dataframe validation function
 from src.data_pipeline.pipeline_data import fetch_preprocessed
@@ -54,6 +57,7 @@ X = df.drop(columns=[TARGET_COL])
 y = df[TARGET_COL]
 logger.info("Validated preprocessed data loaded successfully. Ready for training.")
 
+<<<<<<< HEAD
 # 4️⃣ SMOTETomek applied once (before CV) to reduce runtime
 apply_smotetomek = train_config.get("resampling", {}).get("apply_smotetomek", False)
 smote_sampler = SMOTETomek(random_state=train_config["model"]["random_state"]) if apply_smotetomek else None
@@ -61,6 +65,8 @@ if smote_sampler:
     X, y = smote_sampler.fit_resample(X, y)
     logger.info(f"SMOTETomek applied: dataset size after resampling = {X.shape[0]} samples")
 
+=======
+>>>>>>> ed862b2b0c5d6b4ad459fa709457b0702429c89a
 # MLflow setup
 if not MLFLOW_URI:
     raise ValueError("MLFLOW_TRACKING_URI not found in .env")
@@ -68,14 +74,24 @@ mlflow.set_tracking_uri(MLFLOW_URI)
 mlflow.set_experiment("Customer Churn Model Training")
 logger.info(f"MLflow tracking URI: {MLFLOW_URI}")
 
+<<<<<<< HEAD
 # Tag MLflow run with DVC data hash for lineage
 dvc_hash = subprocess.getoutput("dvc hash data/processed/preprocessed.csv")
 
+=======
+>>>>>>> ed862b2b0c5d6b4ad459fa709457b0702429c89a
 # Defining models
 available_models = {
     "random_forest": RandomForestClassifier(random_state=train_config["model"]["random_state"])
 }
 
+<<<<<<< HEAD
+=======
+# Resampler setup
+apply_smotetomek = train_config.get("resampling", {}).get("apply_smotetomek", False)
+smote_sampler = SMOTETomek(random_state=train_config["model"]["random_state"]) if apply_smotetomek else None
+
+>>>>>>> ed862b2b0c5d6b4ad459fa709457b0702429c89a
 # Model evaluation function
 def evaluate_models(X, y, train_config):
     model_names = train_config["model_selection"]["model_choice"]
@@ -153,6 +169,7 @@ def evaluate_models(X, y, train_config):
             else:
                 logger.warning(f"Model {name} did not meet thresholds: {avg_metrics}")
 
+<<<<<<< HEAD
             run_id = mlflow.active_run().info.run_id
 
     if best_models:
@@ -166,6 +183,19 @@ def evaluate_models(X, y, train_config):
 
 # Run evaluation
 best_model_name, best_model, best_metrics, run_id = evaluate_models(X, y, train_config)
+=======
+    if best_models:
+        best_model_name = max(
+            best_models,
+            key=lambda n: best_models[n][1][primary_metric]
+        )
+        return best_model_name, best_models[best_model_name][0], best_models[best_model_name][1]
+
+    return None, None, None
+
+# Run evaluation
+best_model_name, best_model, best_metrics = evaluate_models(X, y, train_config)
+>>>>>>> ed862b2b0c5d6b4ad459fa709457b0702429c89a
 
 # Save & log best model
 if best_model_name:
@@ -174,6 +204,7 @@ if best_model_name:
     logger.info(f"Best model saved locally at: {local_model_path}")
     mlflow.sklearn.log_model(best_model, name="model", input_example=X.iloc[:5])
 
+<<<<<<< HEAD
     # Register best model in MLflow Model Registry
     try:
         mlflow.register_model(f"runs:/{run_id}/model", "customer_churn_model")
@@ -181,6 +212,8 @@ if best_model_name:
     except Exception as e:
         logger.warning(f"Failed to register model in MLflow Registry: {e}")
 
+=======
+>>>>>>> ed862b2b0c5d6b4ad459fa709457b0702429c89a
 # Azure upload
 if best_model_name and AZURE_CONN_STR and AZURE_CONTAINER_NAME:
     try:
@@ -197,5 +230,8 @@ if best_model_name and AZURE_CONN_STR and AZURE_CONTAINER_NAME:
             logger.warning(f"Azure container '{AZURE_CONTAINER_NAME}' does not exist. Skipping upload.")
     except Exception as e:
         logger.exception(f"Azure upload failed for {best_model_name}: {e}")
+<<<<<<< HEAD
 else:
     logger.info(f"Azure upload skipped: {AZURE_CONTAINER_NAME} or connection string missing")
+=======
+>>>>>>> ed862b2b0c5d6b4ad459fa709457b0702429c89a
