@@ -13,6 +13,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from sklearn.ensemble import RandomForestClassifier
 from imblearn.combine import SMOTETomek
 import warnings
+import subprocess
 
 # Importing dataframe validation function
 from src.data_pipeline.pipeline_data import fetch_preprocessed
@@ -53,6 +54,13 @@ X = df.drop(columns=[TARGET_COL])
 y = df[TARGET_COL]
 logger.info("Validated preprocessed data loaded successfully. Ready for training.")
 
+# 4️⃣ SMOTETomek applied once (before CV) to reduce runtime
+apply_smotetomek = train_config.get("resampling", {}).get("apply_smotetomek", False)
+smote_sampler = SMOTETomek(random_state=train_config["model"]["random_state"]) if apply_smotetomek else None
+if smote_sampler:
+    X, y = smote_sampler.fit_resample(X, y)
+    logger.info(f"SMOTETomek applied: dataset size after resampling = {X.shape[0]} samples")
+
 # MLflow setup
 if not MLFLOW_URI:
     raise ValueError("MLFLOW_TRACKING_URI not found in .env")
@@ -60,14 +68,13 @@ mlflow.set_tracking_uri(MLFLOW_URI)
 mlflow.set_experiment("Customer Churn Model Training")
 logger.info(f"MLflow tracking URI: {MLFLOW_URI}")
 
+# Tag MLflow run with DVC data hash for lineage
+dvc_hash = subprocess.getoutput("dvc hash data/processed/preprocessed.csv")
+
 # Defining models
 available_models = {
     "random_forest": RandomForestClassifier(random_state=train_config["model"]["random_state"])
 }
-
-# Resampler setup
-apply_smotetomek = train_config.get("resampling", {}).get("apply_smotetomek", False)
-smote_sampler = SMOTETomek(random_state=train_config["model"]["random_state"]) if apply_smotetomek else None
 
 # Model evaluation function
 def evaluate_models(X, y, train_config):
@@ -101,19 +108,27 @@ def evaluate_models(X, y, train_config):
         )
 
         with mlflow.start_run(run_name=f"{name}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"):
+            # Re-tag inside run
+            mlflow.set_tag("dvc_data_hash", dvc_hash)
+            mlflow.set_tag("script_version", os.path.basename(__file__))
+            mlflow.set_tag("smotetomek_applied", str(apply_smotetomek))
+            mlflow.set_tag("random_state", str(train_config["model"]["random_state"]))
+            mlflow.set_tag("preprocess_columns", ",".join(train_config.get("preprocessing", {}).get("drop_columns", [])))
+            mlflow.log_param("num_samples", X.shape[0])
+            mlflow.log_param("num_features", X.shape[1])
+
             grid.fit(X, y)
             best_model = grid.best_estimator_
             mlflow.log_params(grid.best_params_)
 
+            # CV metrics
             fold_metrics = []
             for train_idx, test_idx in skf.split(X, y):
                 X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
                 y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
 
-                if smote_sampler:
-                    X_train_res, y_train_res = smote_sampler.fit_resample(X_train, y_train)
-                else:
-                    X_train_res, y_train_res = X_train, y_train
+                # No resampling inside folds since we already applied SMOTETomek once
+                X_train_res, y_train_res = X_train, y_train
 
                 best_model.fit(X_train_res, y_train_res)
                 y_pred = best_model.predict(X_test)
@@ -138,17 +153,19 @@ def evaluate_models(X, y, train_config):
             else:
                 logger.warning(f"Model {name} did not meet thresholds: {avg_metrics}")
 
+            run_id = mlflow.active_run().info.run_id
+
     if best_models:
         best_model_name = max(
             best_models,
             key=lambda n: best_models[n][1][primary_metric]
         )
-        return best_model_name, best_models[best_model_name][0], best_models[best_model_name][1]
+        return best_model_name, best_models[best_model_name][0], best_models[best_model_name][1], run_id
 
-    return None, None, None
+    return None, None, None, None
 
 # Run evaluation
-best_model_name, best_model, best_metrics = evaluate_models(X, y, train_config)
+best_model_name, best_model, best_metrics, run_id = evaluate_models(X, y, train_config)
 
 # Save & log best model
 if best_model_name:
@@ -156,6 +173,13 @@ if best_model_name:
     joblib.dump(best_model, local_model_path)
     logger.info(f"Best model saved locally at: {local_model_path}")
     mlflow.sklearn.log_model(best_model, name="model", input_example=X.iloc[:5])
+
+    # Register best model in MLflow Model Registry
+    try:
+        mlflow.register_model(f"runs:/{run_id}/model", "customer_churn_model")
+        logger.info(f"Model registered in MLflow Model Registry as 'customer_churn_model'")
+    except Exception as e:
+        logger.warning(f"Failed to register model in MLflow Registry: {e}")
 
 # Azure upload
 if best_model_name and AZURE_CONN_STR and AZURE_CONTAINER_NAME:
@@ -173,3 +197,5 @@ if best_model_name and AZURE_CONN_STR and AZURE_CONTAINER_NAME:
             logger.warning(f"Azure container '{AZURE_CONTAINER_NAME}' does not exist. Skipping upload.")
     except Exception as e:
         logger.exception(f"Azure upload failed for {best_model_name}: {e}")
+else:
+    logger.info(f"Azure upload skipped: {AZURE_CONTAINER_NAME} or connection string missing")
