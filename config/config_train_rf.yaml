@@ -16,7 +16,6 @@ model_selection:
 
 hyperparameters:
   random_forest:
-<<<<<<< HEAD
     n_estimators: [60, 200]         
     max_depth: [10, 20, null]      
     max_features: ["sqrt", "log2"]   
@@ -31,22 +30,6 @@ cv:
 
 resampling:
   apply_smotetomek: true  
-=======
-    n_estimators: [200, 400, 600]
-    max_depth: [10, 20, 30, null]       # null = unlimited depth
-    max_features: ["sqrt", "log2", null] # valid options: sqrt, log2, or None
-    min_samples_split: [2, 5, 10]
-    min_samples_leaf: [1, 2, 4]
-
-cv:
-  n_splits: 10
-  scoring: "roc_auc"
-  n_jobs: 6
-  verbose: 1
-
-resampling:
-  apply_smotetomek: true  # SMOTETomek for handling class imbalance
->>>>>>> ed862b2b0c5d6b4ad459fa709457b0702429c89a
 
 experiment_name: "Customer Churn Model Training"
 
@@ -56,13 +39,8 @@ mlflow:
 model:
   random_state: 42
   test_size: 0.2
-<<<<<<< HEAD
-  n_estimators: 100          
-  max_depth: null           
-=======
   n_estimators: 100          # number of trees
   max_depth: null            # None in Python → unlimited depth
->>>>>>> ed862b2b0c5d6b4ad459fa709457b0702429c89a
   min_samples_split: 2
   min_samples_leaf: 1
   max_features: "sqrt"       # allowed values: sqrt, log2, or None
