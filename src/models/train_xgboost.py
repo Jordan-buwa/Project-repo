@@ -120,7 +120,7 @@ class XGBoostTrainer:
                     f"fold_{fold}_roc_auc": roc,
                 })
                 mlflow.xgboost.log_model(
-                    best_model, artifact_path=f"xgboost_model_fold_{fold}")
+                    best_model, name=f"xgboost_model_fold_{fold}")
 
                 fold_metrics.append({
                     "fold": fold,
@@ -166,8 +166,15 @@ class XGBoostTrainer:
             # Log final model & metrics
             mlflow.log_metrics(
                 {"final_accuracy": acc, "final_f1": best_f1, "final_roc_auc": roc})
+            from mlflow.models import infer_signature
+            signature = infer_signature(X, final_model.predict(X))
+            input_example = X.head(5)
+
             mlflow.xgboost.log_model(
-                final_model, artifact_path="xgboost_final_model")
+                final_model,
+                name="xgboost_final_model",
+                signature=signature,
+                input_example=input_example)
 
             # Remove the preprocessing artifacts saving block since we're not using self.dp
             # Instead, log feature names and other relevant metadata
@@ -185,7 +192,7 @@ class XGBoostTrainer:
             try:
                 with open(metadata_path, 'w') as f:
                     json.dump(feature_metadata, f, indent=2)
-                mlflow.log_artifact(metadata_path, artifact_path="feature_metadata")
+                mlflow.log_artifact(metadata_path, name="feature_metadata")
                 self.logger.info(f"Feature metadata saved successfully at {metadata_path}")
             except Exception as e:
                 self.logger.error(f"Failed to save feature metadata: {str(e)}")
