@@ -8,16 +8,21 @@ from imblearn.over_sampling import SMOTE
 import numpy as np
 from src.data_pipeline.pipeline_data import fetch_preprocessed
 import yaml
+import mlflow
+import mlflow.pytorch
 import os
+from datetime import datetime
 from src.data_pipeline.ingest import setup_logger
 from dotenv import load_dotenv
 load_dotenv()
 
-MODEL_DIR = os.getenv("MODEL_DIR", "models/")
+MODEL_DIR = os.getenv("MODEL_DIR")
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
+os.makedirs(MODEL_DIR, exist_ok=True)
 df_processed = fetch_preprocessed()
 
 
-config_path = "config/config_train.yaml"
+config_path = "config/config_train_nn.yaml"
 with open(config_path, "r") as f:
     config = yaml.safe_load(f)
 
@@ -52,40 +57,61 @@ batch_size = best_params["batch_size"]
 skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 smote = SMOTE(random_state=42)
 
-metrics_all = {"AUC": [], "F1": [], "Recall": [], "Precision": [], "Accuracy": []}
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+mlflow.set_experiment("Customer_Churn_NN")
 
-logger.info("Training final model with cross-validation...")
-for fold, (train_idx, test_idx) in enumerate(skf.split(X, y)):
-    X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
-    X_test, y_test = X.iloc[test_idx], y.iloc[test_idx]
-    X_train_res, y_train_res = smote.fit_resample(X_train, y_train)
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+with mlflow.start_run(run_name=f"NN_training_{timestamp}"):
+    script_name = os.path.basename(__file__) if "__file__" in globals() else "notebook"
+    mlflow.set_tag("script_version", script_name)
+    mlflow.log_param("num_samples", X.shape[0])
+    mlflow.log_param("num_features", X.shape[1])
 
-    X_train_tensor = torch.tensor(X_train_res.values, dtype=torch.float32)
-    y_train_tensor = torch.tensor(y_train_res.values, dtype=torch.float32)
-    X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
-    y_test_tensor = torch.tensor(y_test.values, dtype=torch.float32)
+    # Log hyperparameters
+    mlflow.log_params(best_params)
 
-    train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    metrics_all = {"AUC": [], "F1": [], "Recall": [], "Precision": [], "Accuracy": []}
 
-    model = ChurnNN(input_size=X.shape[1], n_layers=n_layers, n_units=n_units, dropout_rate=dropout_rate)
-    criterion = torch.nn.BCELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    logger.info("Training final model with cross-validation...")
+    for fold, (train_idx, test_idx) in enumerate(skf.split(X, y)):
+        X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
+        X_test, y_test = X.iloc[test_idx], y.iloc[test_idx]
+        X_train_res, y_train_res = smote.fit_resample(X_train, y_train)
 
-    train_model(model, train_loader, criterion, optimizer, num_epochs=20, device=device)
-    metrics = evaluate_model(model, X_test_tensor, y_test_tensor, device=device)
+        X_train_tensor = torch.tensor(X_train_res.values, dtype=torch.float32)
+        y_train_tensor = torch.tensor(y_train_res.values, dtype=torch.float32)
+        X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
+        y_test_tensor = torch.tensor(y_test.values, dtype=torch.float32)
 
-    for k, v in metrics.items():
-        metrics_all[k].append(v)
-    print(f"Fold {fold + 1} metrics: {metrics}")
+        train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
+        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-# Print final average results
-print("\nFinal Average Metrics:")
-logger.info("Final Average Metrics:")
-for k, v in metrics_all.items():
-    print(f"{k}: {np.mean(v):.4f} ± {np.std(v):.4f}")
-    logger.info(f"{k}: {np.mean(v):.4f} ± {np.std(v):.4f}")
+        model = ChurnNN(input_size=X.shape[1], n_layers=n_layers, n_units=n_units, dropout_rate=dropout_rate)
+        criterion = torch.nn.BCELoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-path = MODEL_DIR + "churn_model_with_optuna.pth"
-torch.save(model.state_dict(), path)
-print("Model saved.")
+        train_model(model, train_loader, criterion, optimizer, num_epochs=20, device=device)
+        metrics = evaluate_model(model, X_test_tensor, y_test_tensor, device=device)
+
+        for k, v in metrics.items():
+            metrics_all[k].append(v)
+            mlflow.log_metric(f"{k}_fold_{fold+1}", v)
+        print(f"Fold {fold + 1} metrics: {metrics}")
+        logger.info(f"Fold {fold + 1} metrics: {metrics}")
+    # Log average metrics
+    avg_metrics = {k: np.mean(v) for k, v in metrics_all.items()}
+    mlflow.log_metrics(avg_metrics)
+    # Print final average results
+    print("\nFinal Average Metrics:")
+    logger.info("Final Average Metrics:")
+    for k, v in metrics_all.items():
+        print(f"{k}: {np.mean(v):.4f} ± {np.std(v):.4f}")
+        logger.info(f"{k}: {np.mean(v):.4f} ± {np.std(v):.4f}")
+
+    # Save model with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_path = os.path.join(MODEL_DIR, f"nn_model_{timestamp}.pth")
+    mlflow.pytorch.log_model(model, name=f"churn_model_{timestamp}")
+    torch.save(model.state_dict(), model_path)
+    print(f"Model saved at {model_path}")
+    logger.info(f"Model saved at {model_path}")

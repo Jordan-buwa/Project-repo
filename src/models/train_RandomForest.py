@@ -108,7 +108,7 @@ def evaluate_models(X, y, train_config):
             cv=skf,
             n_jobs=train_config["cv"]["n_jobs"],
             verbose=train_config["cv"]["verbose"],
-            pre_dispatch=2 * train_config["cv"]["n_jobs"],
+            pre_dispatch="2 * n_jobs",
             error_score='raise'
         )
 
@@ -173,7 +173,8 @@ best_model_name, best_model, best_metrics, run_id = evaluate_models(X, y, train_
 
 # Saving & logging best model
 if best_model_name:
-    local_model_path = os.path.join(MODEL_DIR, f"{best_model_name}.joblib")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    local_model_path = os.path.join(MODEL_DIR, f"rf_model_{timestamp}.joblib")
     joblib.dump(best_model, local_model_path)
     logger.info(f"Best model saved locally at: {local_model_path}")
     mlflow.sklearn.log_model(best_model, name="model", input_example=X.iloc[:5])
@@ -184,22 +185,4 @@ if best_model_name:
         logger.info(f"Model registered in MLflow Registry as 'customer_churn_model'")
     except Exception as e:
         logger.warning(f"Failed to register model: {e}")
-
-# Azure upload
-if best_model_name and AZURE_CONN_STR and AZURE_CONTAINER_NAME:
-    try:
-        from azure.storage.blob import BlobServiceClient
-        blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONN_STR)
-        container_client = blob_service_client.get_container_client(AZURE_CONTAINER_NAME)
-        try:
-            container_client.get_container_properties()
-            blob_name = f"{best_model_name}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pkl"
-            with open(local_model_path, "rb") as data:
-                container_client.upload_blob(name=blob_name, data=data, overwrite=True)
-            logger.info(f"Uploaded {best_model_name} to Azure Blob Storage as '{blob_name}'")
-        except Exception as e:
-            logger.warning(f"Azure container '{AZURE_CONTAINER_NAME}' not accessible: {e}")
-    except Exception as e:
-        logger.exception(f"Azure upload failed for {best_model_name}: {e}")
-else:
-    logger.info(f"Azure upload skipped: container or connection string missing")
+logger.info(f"Training completed. Best model: {best_model_name} with metrics: {best_metrics}")
