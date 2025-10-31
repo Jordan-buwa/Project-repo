@@ -14,5 +14,5 @@ push.py
 data/logs
 mlruns/
 *.joblib
-./models/
+models/
 dvc_refresh.sh
