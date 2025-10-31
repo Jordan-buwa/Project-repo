@@ -7,6 +7,7 @@ from sklearn.model_selection import StratifiedKFold
 from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.over_sampling import SMOTE
 import optuna
+from optuna.integration import MLflowCallback
 import logging
 from sklearn.impute import SimpleImputer
 import os
@@ -24,12 +25,33 @@ n_trials = config["training"]["n_trials"]
 log_path = config["paths"]["logs"]
 os.makedirs(os.path.dirname(log_path), exist_ok=True)
 
-logging.basicConfig(
-    filename=log_path,
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+def setup_logger(log_path):
+    logger = logging.getLogger("OptunaStudy")
+    if logger.handlers:
+        return logger
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    handler = logging.FileHandler(log_path)
+    handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+    logger.addHandler(handler)
+    logger.addHandler(logging.StreamHandler())  # Console
+    logger.setLevel(logging.INFO)
+    return logger
+
+logger = setup_logger(log_path=log_path)
+
+# === Optuna Logger ===
+class OptunaLogger:
+    def __init__(self, logger):
+        self.logger = logger
+    def __call__(self, study, trial):
+        if trial.state == optuna.trial.TrialState.COMPLETE:
+            self.logger.info(f"[Trial {trial.number}] F1: {trial.value:.4f} | {trial.params}")
+        elif trial.state == optuna.trial.TrialState.PRUNED:
+            self.logger.warning(f"[Trial {trial.number}] Pruned")
+        elif trial.state == optuna.trial.TrialState.FAIL:
+            self.logger.error(f"[Trial {trial.number}] Failed")
+
+optuna_logger = OptunaLogger(logger)
 
 # --- Objective function ---
 def objective(trial, X, y, device=device):
@@ -55,7 +77,7 @@ def objective(trial, X, y, device=device):
 
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     smote = SMOTE(random_state=42)
-    auc_scores = []
+    f1_scores = []
 
     for train_idx, test_idx in skf.split(X, y):
         X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
@@ -82,12 +104,13 @@ def objective(trial, X, y, device=device):
 
         train_model(model, train_loader, criterion, optimizer, num_epochs=num_epochs, device=device)
         metrics = evaluate_model(model, X_test_tensor, y_test_tensor, device=device)
-        auc_scores.append(metrics["AUC"])
+        f1_scores.append(metrics["F1"])
 
-    return np.mean(auc_scores)
+    return np.mean(f1_scores)
 
 # --- Run Optuna study ---
 def run_optuna_optimization(X, y, n_trials=n_trials, device=device):
-    study = optuna.create_study(direction='maximize')
-    study.optimize(lambda trial: objective(trial, X, y, device), n_trials=n_trials)
+    mlflow_callback = MLflowCallback(metric_name="f1_score")
+    study = optuna.create_study(direction='maximize', study_name="Churn NN Optimization")
+    study.optimize(lambda trial: objective(trial, X, y, device), n_trials=n_trials, callbacks=[optuna_logger, mlflow_callback])
     return study
