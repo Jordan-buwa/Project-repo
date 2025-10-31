@@ -1,19 +1,23 @@
+from collections import defaultdict
+from src.data_pipeline.preprocess import DataPreprocessor
 import os
 import yaml
-import json
 import joblib
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 import pandas as pd
+import numpy as np
 from xgboost import XGBClassifier
 from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, classification_report
 from imblearn.combine import SMOTETomek
 import mlflow
+from mlflow.models.signature import infer_signature
 import mlflow.xgboost
 from src.data_pipeline.pipeline_data import fetch_preprocessed
 from mlflow.models import infer_signature
 import warnings
+import subprocess
 # Suppressing unnecessary warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -37,8 +41,6 @@ def setup_logger(log_path: str, log_level: str = "INFO"):
     )
     return logging.getLogger(__name__)
 
-
-# XGBoost Trainer with MLflow
 
 class XGBoostTrainer:
     def __init__(self, config: dict, logger: logging.Logger):
@@ -73,20 +75,34 @@ class XGBoostTrainer:
         fold_metrics = []
         param_grid = self.config["xgboost_params"]
 
-        # Start MLflow run
-        mlflow.set_experiment("XGBoost_Churn_Experiment")
-        with mlflow.start_run(run_name=f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}") as run:
+        # Fetch DVC hash for tracking
+        try:
+            dvc_hash = subprocess.getoutput(
+                "dvc hash data/processed/preprocessed.csv")
+        except Exception:
+            dvc_hash = "N/A"
 
-            # Log config
+        # MLflow setup
+        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
+        mlflow.set_tracking_uri(mlflow_uri)
+        mlflow.set_experiment("XGBoost_Churn_Experiment")
+        self.logger.info(f"MLflow tracking URI: {mlflow_uri}")
+
+        y_true_global = []
+        y_pred_global = []
+
+        with mlflow.start_run(run_name=f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"):
             mlflow.log_params(self.config)
             self.run_id = mlflow.active_run().info.run_id
             for fold, (train_idx, val_idx) in enumerate(skf.split(X, y), 1):
                 self.logger.info(f"Starting fold {fold}...")
                 print(f"Starting fold {fold}...")
+            mlflow.set_tag("dvc_data_hash", dvc_hash)
                 X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
                 print(f"Fold {fold} X_train.shape={X_train.shape}, X_val.shape={X_val.shape}")
                 y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
+                # Resampling inside fold
                 if self.config.get("apply_smotetomek", True):
                     smt = SMOTETomek(random_state=self.config["random_state"])
                     X_train, y_train = smt.fit_resample(X_train, y_train)
@@ -119,14 +135,16 @@ class XGBoostTrainer:
                     y_val, y_probs)
                 y_pred = (y_probs >= best_threshold).astype(int)
 
-                acc = accuracy_score(y_val, y_pred)
-                roc = roc_auc_score(y_val, y_pred)
+                # Collect predictions for global F1
+                y_true_global.extend(y_val)
+                y_pred_global.extend(y_pred)
 
+                acc = accuracy_score(y_val, y_pred)
+                roc = roc_auc_score(y_val, y_probs)
                 self.logger.info(
                     f"Fold {fold}: Accuracy={acc:.4f}, F1={best_f1:.4f}, ROC-AUC={roc:.4f}")
                 print(f"Fold {fold}: Accuracy={acc:.4f}, F1={best_f1:.4f}, ROC-AUC={roc:.4f}, threshold={best_threshold:.2f}")
 
-                # Log fold metrics & model
                 mlflow.log_metrics({
                     f"fold_{fold}_accuracy": acc,
                     f"fold_{fold}_f1": best_f1,
@@ -135,7 +153,7 @@ class XGBoostTrainer:
 
                 X_val_float = X_val.astype({col: 'float64' for col in X_val.select_dtypes('integer').columns})
                 signature = infer_signature(X_val_float, best_model.predict_proba(X_val_float))
-                input_example = X_val_float.head(3)
+                input_example = X_val_float.head(5)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 mlflow.xgboost.log_model(
                     xgb_model=best_model,
@@ -152,17 +170,42 @@ class XGBoostTrainer:
                     "accuracy": acc,
                     "f1_score": best_f1,
                     "roc_auc": roc,
-                    "threshold": best_threshold
+                    "threshold": best_threshold,
+                    "y_val_list": y_val.tolist(),
+                    "y_pred_list": y_pred.tolist()
                 })
 
-            # Final model training
+            # Compute Global F1
+            global_f1 = f1_score(
+                y_true_global, y_pred_global, average="binary")
+            self.logger.info(f"Global F1 across all folds: {global_f1:.4f}")
+            mlflow.log_metric("global_f1", global_f1)
 
-            best_fold = max(fold_metrics, key=lambda x: x["f1_score"])
-            best_params = best_fold["best_params"]
+            # Select Best Params Using Global F1
+            param_preds = defaultdict(lambda: {"y_true": [], "y_pred": []})
+
+            for m in fold_metrics:
+                key = tuple(sorted(m["best_params"].items()))
+                param_preds[key]["y_true"].extend(m["y_val_list"])
+                param_preds[key]["y_pred"].extend(m["y_pred_list"])
+
+            global_f1_per_param = {
+                k: f1_score(v["y_true"], v["y_pred"], average="binary")
+                for k, v in param_preds.items()
+            }
+
+            best_params_tuple = max(
+                global_f1_per_param, key=global_f1_per_param.get)
+            best_params = dict(best_params_tuple)
+            best_global_f1 = global_f1_per_param[best_params_tuple]
+
+            self.logger.info(f"Best parameters (global F1): {best_params}")
             self.logger.info(
                 f"Best fold: {best_fold['fold']} with F1={best_fold['f1_score']:.4f}")
             print(f"Best fold selected: {best_fold['fold']} with params: {best_params}")
+            mlflow.log_metric("best_global_f1", best_global_f1)
 
+            #  Train Final Model
             if self.config.get("apply_smotetomek", True):
                 smt = SMOTETomek(random_state=self.config["random_state"])
                 X, y = smt.fit_resample(X, y)
@@ -183,13 +226,19 @@ class XGBoostTrainer:
             y_pred_full = (y_probs_full >= best_threshold).astype(int)
 
             acc = accuracy_score(y, y_pred_full)
-            roc = roc_auc_score(y, y_pred_full)
+            roc = roc_auc_score(y, y_probs_full)
             self.logger.info(
                 f"Final model performance: Accuracy={acc:.4f}, F1={best_f1:.4f}, ROC-AUC={roc:.4f}")
             print(f"Final model metrics: Accuracy={acc:.4f}, F1={best_f1:.4f}, ROC-AUC={roc:.4f}, threshold={best_threshold:.4f}")
             self.logger.info("\n" + classification_report(y, y_pred_full))
 
-            # Log final model & metrics
+            #  MLflow Logging
+            signature = infer_signature(X, final_model.predict(X))
+            input_example = X.head(5)
+            mlflow.xgboost.log_model(final_model,
+                                     name="xgboost_final_model",
+                                     signature=signature,
+                                     input_example=input_example)
             mlflow.log_metrics(
                 {"final_accuracy": acc, "final_f1": best_f1, "final_roc_auc": roc})
             X_float = X.astype({col: 'float64' for col in X.select_dtypes('integer').columns})
@@ -260,14 +309,10 @@ if __name__ == "__main__":
     logger.info("Loading preprocessed data...")
 
     df_processed = fetch_preprocessed()
-
-    # Features & target
     target_col = config["target_column"]
     X = df_processed.drop(columns=[target_col])
     y = df_processed[target_col]
 
-    # Train and log model
     trainer = XGBoostTrainer(config=config, logger=logger)
     best_model, fold_metrics = trainer.train_and_tune_model(X, y)
     trainer.save_model(best_model)
-
