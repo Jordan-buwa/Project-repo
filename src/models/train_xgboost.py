@@ -1,50 +1,35 @@
 from collections import defaultdict
 from src.data_pipeline.preprocess import DataPreprocessor
-import os
-import yaml
-import joblib
-import logging
 from datetime import datetime
-import pandas as pd
-import numpy as np
 from xgboost import XGBClassifier
 from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, classification_report
 from imblearn.combine import SMOTETomek
-import mlflow
 from mlflow.models.signature import infer_signature
-import mlflow.xgboost
 from src.data_pipeline.pipeline_data import fetch_preprocessed
-<<<<<<< HEAD
 import warnings
 import subprocess
+import json
+import yaml
+import joblib
+import os
+import mlflow
+import logging
+from dotenv import load_dotenv
 
-[warnings.filterwarnings("ignore", category=c)
- for c in (UserWarning, FutureWarning)]
-
-=======
-from mlflow.models import infer_signature
-import warnings
 # Suppressing unnecessary warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
-from dotenv import load_dotenv
+
 load_dotenv()
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
 MODEL_DIR = os.getenv("MODEL_DIR")
 os.makedirs(MODEL_DIR, exist_ok=True)
->>>>>>> jordan_branch
 
 # Logger Setup
 def setup_logger(log_path: str, log_level: str = "INFO"):
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-<<<<<<< HEAD
-    full_log_path = log_path.replace(".log", f"_{timestamp}.log")
-=======
     full_log_path = log_path.replace(".log", f"xgb_{timestamp}.log")
-
->>>>>>> jordan_branch
     logging.basicConfig(
         filename=full_log_path,
         filemode="a",
@@ -52,7 +37,6 @@ def setup_logger(log_path: str, log_level: str = "INFO"):
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
     return logging.getLogger(__name__)
-
 
 class XGBoostTrainer:
     def __init__(self, config: dict, logger: logging.Logger):
@@ -105,18 +89,12 @@ class XGBoostTrainer:
 
         with mlflow.start_run(run_name=f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"):
             mlflow.log_params(self.config)
-<<<<<<< HEAD
             mlflow.set_tag("dvc_data_hash", dvc_hash)
 
             #  K-Fold Training
             for fold, (train_idx, val_idx) in enumerate(skf.split(X, y), 1):
                 self.logger.info(f"Starting fold {fold}...")
-=======
-            self.run_id = mlflow.active_run().info.run_id
-            for fold, (train_idx, val_idx) in enumerate(skf.split(X, y), 1):
-                self.logger.info(f"Starting fold {fold}...")
                 print(f"Starting fold {fold}...")
->>>>>>> jordan_branch
                 X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
                 print(f"Fold {fold} X_train.shape={X_train.shape}, X_val.shape={X_val.shape}")
                 y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
@@ -143,11 +121,8 @@ class XGBoostTrainer:
                     n_jobs=-1,
                     random_state=self.config["random_state"]
                 )
-<<<<<<< HEAD
-=======
 
                 print(f"Fold {fold}: starting RandomizedSearchCV...")
->>>>>>> jordan_branch
                 tuner.fit(X_train, y_train)
                 best_model = tuner.best_estimator_
                 print(f"Fold {fold}: best_params_ = {tuner.best_params_}")
@@ -173,18 +148,9 @@ class XGBoostTrainer:
                     f"fold_{fold}_roc_auc": roc,
                 })
 
-<<<<<<< HEAD
-                fold_signature = infer_signature(
-                    X_val, best_model.predict(X_val))
-                fold_input_example = X_val.head(5)
-                mlflow.xgboost.log_model(best_model,
-                                         name=f"xgboost_model_fold_{fold}",
-                                         signature=fold_signature,
-                                         input_example=fold_input_example)
-=======
                 X_val_float = X_val.astype({col: 'float64' for col in X_val.select_dtypes('integer').columns})
                 signature = infer_signature(X_val_float, best_model.predict_proba(X_val_float))
-                input_example = X_val_float.head(3)
+                input_example = X_val_float.head(5)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 mlflow.xgboost.log_model(
                     xgb_model=best_model,
@@ -193,8 +159,6 @@ class XGBoostTrainer:
                     input_example=input_example
                 )
                 print(f"Fold {fold}: logged model to mlflow as fold_{fold}_model_{timestamp}")
-                #mlflow.xgboost.log_model(best_model, name=f"xgboost_model_fold_{fold}")
->>>>>>> jordan_branch
 
                 fold_metrics.append({
                     "fold": fold,
@@ -233,13 +197,8 @@ class XGBoostTrainer:
 
             self.logger.info(f"Best parameters (global F1): {best_params}")
             self.logger.info(
-<<<<<<< HEAD
                 f"Best global F1 across folds: {best_global_f1:.4f}")
             mlflow.log_metric("best_global_f1", best_global_f1)
-=======
-                f"Best fold: {best_fold['fold']} with F1={best_fold['f1_score']:.4f}")
-            print(f"Best fold selected: {best_fold['fold']} with params: {best_params}")
->>>>>>> jordan_branch
 
             #  Train Final Model
             if self.config.get("apply_smotetomek", True):
@@ -264,12 +223,8 @@ class XGBoostTrainer:
             acc = accuracy_score(y, y_pred_full)
             roc = roc_auc_score(y, y_probs_full)
             self.logger.info(
-<<<<<<< HEAD
                 f"Final model: Accuracy={acc:.4f}, F1={best_f1:.4f}, ROC-AUC={roc:.4f}")
-=======
-                f"Final model performance: Accuracy={acc:.4f}, F1={best_f1:.4f}, ROC-AUC={roc:.4f}")
             print(f"Final model metrics: Accuracy={acc:.4f}, F1={best_f1:.4f}, ROC-AUC={roc:.4f}, threshold={best_threshold:.4f}")
->>>>>>> jordan_branch
             self.logger.info("\n" + classification_report(y, y_pred_full))
 
             #  MLflow Logging
@@ -281,7 +236,6 @@ class XGBoostTrainer:
                                      input_example=input_example)
             mlflow.log_metrics(
                 {"final_accuracy": acc, "final_f1": best_f1, "final_roc_auc": roc})
-<<<<<<< HEAD
             mlflow.log_metric("final_threshold", best_threshold)
 
             #  Save Preprocessing Artifact
@@ -294,12 +248,6 @@ class XGBoostTrainer:
             signature = infer_signature(X, final_model.predict(X))
             input_example = X.head(5)
 
-=======
-            X_float = X.astype({col: 'float64' for col in X.select_dtypes('integer').columns})
-            signature = infer_signature(X_float, final_model.predict_proba(X_float))
-            input_example = X_float.head(3)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
->>>>>>> jordan_branch
             mlflow.xgboost.log_model(
                 final_model,
                 name=f"xgboost_model_{timestamp}",
@@ -371,7 +319,3 @@ if __name__ == "__main__":
     trainer = XGBoostTrainer(config=config, logger=logger)
     best_model, fold_metrics = trainer.train_and_tune_model(X, y)
     trainer.save_model(best_model)
-<<<<<<< HEAD
-=======
-
->>>>>>> jordan_branch
