@@ -1,3 +1,4 @@
+from collections import defaultdict
 from src.data_pipeline.preprocess import DataPreprocessor
 import os
 import yaml
@@ -5,6 +6,7 @@ import joblib
 import logging
 from datetime import datetime
 import pandas as pd
+import numpy as np
 from xgboost import XGBClassifier
 from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, classification_report
@@ -19,9 +21,8 @@ import subprocess
 [warnings.filterwarnings("ignore", category=c)
  for c in (UserWarning, FutureWarning)]
 
+
 # Logger Setup
-
-
 def setup_logger(log_path: str, log_level: str = "INFO"):
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -76,6 +77,9 @@ class XGBoostTrainer:
         mlflow.set_experiment("XGBoost_Churn_Experiment")
         self.logger.info(f"MLflow tracking URI: {mlflow_uri}")
 
+        y_true_global = []
+        y_pred_global = []
+
         with mlflow.start_run(run_name=f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"):
             mlflow.log_params(self.config)
             mlflow.set_tag("dvc_data_hash", dvc_hash)
@@ -116,6 +120,10 @@ class XGBoostTrainer:
                     y_val, y_probs)
                 y_pred = (y_probs >= best_threshold).astype(int)
 
+                # Collect predictions for global F1
+                y_true_global.extend(y_val)
+                y_pred_global.extend(y_pred)
+
                 acc = accuracy_score(y_val, y_pred)
                 roc = roc_auc_score(y_val, y_probs)
                 self.logger.info(
@@ -141,15 +149,41 @@ class XGBoostTrainer:
                     "accuracy": acc,
                     "f1_score": best_f1,
                     "roc_auc": roc,
-                    "threshold": best_threshold
+                    "threshold": best_threshold,
+                    "y_val_list": y_val.tolist(),
+                    "y_pred_list": y_pred.tolist()
                 })
 
-            #  Train Final Model
-            best_fold = max(fold_metrics, key=lambda x: x["f1_score"])
-            best_params = best_fold["best_params"]
-            self.logger.info(
-                f"Best fold: {best_fold['fold']} with F1={best_fold['f1_score']:.4f}")
+            # Compute Global F1
+            global_f1 = f1_score(
+                y_true_global, y_pred_global, average="binary")
+            self.logger.info(f"Global F1 across all folds: {global_f1:.4f}")
+            mlflow.log_metric("global_f1", global_f1)
 
+            # Select Best Params Using Global F1
+            param_preds = defaultdict(lambda: {"y_true": [], "y_pred": []})
+
+            for m in fold_metrics:
+                key = tuple(sorted(m["best_params"].items()))
+                param_preds[key]["y_true"].extend(m["y_val_list"])
+                param_preds[key]["y_pred"].extend(m["y_pred_list"])
+
+            global_f1_per_param = {
+                k: f1_score(v["y_true"], v["y_pred"], average="binary")
+                for k, v in param_preds.items()
+            }
+
+            best_params_tuple = max(
+                global_f1_per_param, key=global_f1_per_param.get)
+            best_params = dict(best_params_tuple)
+            best_global_f1 = global_f1_per_param[best_params_tuple]
+
+            self.logger.info(f"Best parameters (global F1): {best_params}")
+            self.logger.info(
+                f"Best global F1 across folds: {best_global_f1:.4f}")
+            mlflow.log_metric("best_global_f1", best_global_f1)
+
+            #  Train Final Model
             if self.config.get("apply_smotetomek", True):
                 smt = SMOTETomek(random_state=self.config["random_state"])
                 X, y = smt.fit_resample(X, y)
@@ -195,7 +229,7 @@ class XGBoostTrainer:
         return final_model, fold_metrics
 
 
-#  Main Execution
+# Main Execution
 if __name__ == "__main__":
     config_path = "config/config_train.yaml"
     with open(config_path, "r") as f:
