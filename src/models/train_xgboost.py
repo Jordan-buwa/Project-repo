@@ -18,6 +18,9 @@ from src.data_pipeline.pipeline_data import fetch_preprocessed
 from mlflow.models import infer_signature
 import warnings
 import subprocess
+import json
+import yaml
+import joblib
 # Suppressing unnecessary warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -85,7 +88,7 @@ class XGBoostTrainer:
         # MLflow setup
         mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
         mlflow.set_tracking_uri(mlflow_uri)
-        mlflow.set_experiment("XGBoost_Churn_Experiment")
+        mlflow.set_experiment("XGBoost Churn Experiment")
         self.logger.info(f"MLflow tracking URI: {mlflow_uri}")
 
         y_true_global = []
@@ -93,11 +96,12 @@ class XGBoostTrainer:
 
         with mlflow.start_run(run_name=f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"):
             mlflow.log_params(self.config)
+            mlflow.set_tag("dvc_data_hash", dvc_hash)
+
             self.run_id = mlflow.active_run().info.run_id
             for fold, (train_idx, val_idx) in enumerate(skf.split(X, y), 1):
                 self.logger.info(f"Starting fold {fold}...")
                 print(f"Starting fold {fold}...")
-            mlflow.set_tag("dvc_data_hash", dvc_hash)
                 X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
                 print(f"Fold {fold} X_train.shape={X_train.shape}, X_val.shape={X_val.shape}")
                 y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
