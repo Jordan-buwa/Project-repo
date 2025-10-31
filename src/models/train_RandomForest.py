@@ -25,8 +25,6 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # Loading environment variables
 load_dotenv()
 MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
-AZURE_CONN_STR = os.getenv("AZURE_CONN_STR")
-AZURE_CONTAINER_NAME = os.getenv("AZURE_CONTAINER_NAME")
 
 # Logging setup
 os.makedirs("logs", exist_ok=True)
@@ -67,7 +65,7 @@ if smote_sampler:
 if not MLFLOW_URI:
     raise ValueError("MLFLOW_TRACKING_URI not found in .env")
 mlflow.set_tracking_uri(MLFLOW_URI)
-mlflow.set_experiment("Customer Churn Model Training")
+mlflow.set_experiment("Random forest for Churn Model")
 logger.info(f"MLflow tracking URI: {MLFLOW_URI}")
 
 # Tagging MLflow run with DVC data hash for lineage
@@ -177,12 +175,14 @@ if best_model_name:
     local_model_path = os.path.join(MODEL_DIR, f"rf_model_{timestamp}.joblib")
     joblib.dump(best_model, local_model_path)
     logger.info(f"Best model saved locally at: {local_model_path}")
-    mlflow.sklearn.log_model(best_model, name="model", input_example=X.iloc[:5])
+    mlflow.sklearn.log_model(best_model, name=f"random_forest_{timestamp}", input_example=X.iloc[:5])
 
     # Registering in MLflow Model Registry
     try:
-        mlflow.register_model(f"runs:/{run_id}/model", "customer_churn_model")
-        logger.info(f"Model registered in MLflow Registry as 'customer_churn_model'")
+        mlflow.register_model(f"runs:/{run_id}/model", "rf_churn_model")
+        mlflow.log_artifact(local_model_path, "rf_churn_model")
+
+        logger.info(f"Model registered in MLflow Registry as 'rf_churn_model'")
     except Exception as e:
         logger.warning(f"Failed to register model: {e}")
 logger.info(f"Training completed. Best model: {best_model_name} with metrics: {best_metrics}")

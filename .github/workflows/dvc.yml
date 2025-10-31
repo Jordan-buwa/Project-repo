@@ -44,7 +44,7 @@ jobs:
 
       - name: Pull data from DVC remote
         run: |
-          dvc pull -r churn_data 
+          dvc pull -r azureblob 
 
       - name: Check for data changes
         id: data_changes

@@ -12,17 +12,22 @@ from imblearn.combine import SMOTETomek
 import mlflow
 import mlflow.xgboost
 from src.data_pipeline.pipeline_data import fetch_preprocessed
-
-# Import DataPreprocessor
-from src.data_pipeline.preprocess import DataPreprocessor
+from mlflow.models import infer_signature
+import warnings
+# Suppressing unnecessary warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+from dotenv import load_dotenv
+load_dotenv()
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
+MODEL_DIR = os.getenv("MODEL_DIR")
+os.makedirs(MODEL_DIR, exist_ok=True)
 
 # Logger Setup
-
-
 def setup_logger(log_path: str, log_level: str = "INFO"):
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    full_log_path = log_path.replace(".log", f"_{timestamp}.log")
+    full_log_path = log_path.replace(".log", f"xgb_{timestamp}.log")
 
     logging.basicConfig(
         filename=full_log_path,
@@ -40,6 +45,8 @@ class XGBoostTrainer:
         self.config = config
         self.logger = logger
         self.logger.info("XGBoost trainer initialized")
+        self.run_id = None
+        print(f"XGBoostTrainer initialized with config keys: {list(config.keys())}")
 
     @staticmethod
     def find_best_threshold(y_true, y_probs):
@@ -53,7 +60,9 @@ class XGBoostTrainer:
         return best_thresh, best_f1
 
     def train_and_tune_model(self, X, y):
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         self.logger.info("Starting model training with Stratified K-Fold...")
+        print("Starting model training with Stratified K-Fold...")
 
         skf = StratifiedKFold(
             n_splits=self.config["cv_folds"],
@@ -70,11 +79,12 @@ class XGBoostTrainer:
 
             # Log config
             mlflow.log_params(self.config)
-
+            self.run_id = mlflow.active_run().info.run_id
             for fold, (train_idx, val_idx) in enumerate(skf.split(X, y), 1):
                 self.logger.info(f"Starting fold {fold}...")
-
+                print(f"Starting fold {fold}...")
                 X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+                print(f"Fold {fold} X_train.shape={X_train.shape}, X_val.shape={X_val.shape}")
                 y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
                 if self.config.get("apply_smotetomek", True):
@@ -99,8 +109,10 @@ class XGBoostTrainer:
                     random_state=self.config["random_state"]
                 )
 
+                print(f"Fold {fold}: starting RandomizedSearchCV...")
                 tuner.fit(X_train, y_train)
                 best_model = tuner.best_estimator_
+                print(f"Fold {fold}: best_params_ = {tuner.best_params_}")
 
                 y_probs = best_model.predict_proba(X_val)[:, 1]
                 best_threshold, best_f1 = self.find_best_threshold(
@@ -112,6 +124,7 @@ class XGBoostTrainer:
 
                 self.logger.info(
                     f"Fold {fold}: Accuracy={acc:.4f}, F1={best_f1:.4f}, ROC-AUC={roc:.4f}")
+                print(f"Fold {fold}: Accuracy={acc:.4f}, F1={best_f1:.4f}, ROC-AUC={roc:.4f}, threshold={best_threshold:.2f}")
 
                 # Log fold metrics & model
                 mlflow.log_metrics({
@@ -119,8 +132,19 @@ class XGBoostTrainer:
                     f"fold_{fold}_f1": best_f1,
                     f"fold_{fold}_roc_auc": roc,
                 })
+
+                X_val_float = X_val.astype({col: 'float64' for col in X_val.select_dtypes('integer').columns})
+                signature = infer_signature(X_val_float, best_model.predict_proba(X_val_float))
+                input_example = X_val_float.head(3)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 mlflow.xgboost.log_model(
-                    best_model, name=f"xgboost_model_fold_{fold}")
+                    xgb_model=best_model,
+                    name=f"fold_{fold}_model_{timestamp}",
+                    signature=signature,
+                    input_example=input_example
+                )
+                print(f"Fold {fold}: logged model to mlflow as fold_{fold}_model_{timestamp}")
+                #mlflow.xgboost.log_model(best_model, name=f"xgboost_model_fold_{fold}")
 
                 fold_metrics.append({
                     "fold": fold,
@@ -137,6 +161,7 @@ class XGBoostTrainer:
             best_params = best_fold["best_params"]
             self.logger.info(
                 f"Best fold: {best_fold['fold']} with F1={best_fold['f1_score']:.4f}")
+            print(f"Best fold selected: {best_fold['fold']} with params: {best_params}")
 
             if self.config.get("apply_smotetomek", True):
                 smt = SMOTETomek(random_state=self.config["random_state"])
@@ -161,20 +186,22 @@ class XGBoostTrainer:
             roc = roc_auc_score(y, y_pred_full)
             self.logger.info(
                 f"Final model performance: Accuracy={acc:.4f}, F1={best_f1:.4f}, ROC-AUC={roc:.4f}")
+            print(f"Final model metrics: Accuracy={acc:.4f}, F1={best_f1:.4f}, ROC-AUC={roc:.4f}, threshold={best_threshold:.4f}")
             self.logger.info("\n" + classification_report(y, y_pred_full))
 
             # Log final model & metrics
             mlflow.log_metrics(
                 {"final_accuracy": acc, "final_f1": best_f1, "final_roc_auc": roc})
-            from mlflow.models import infer_signature
-            signature = infer_signature(X, final_model.predict(X))
-            input_example = X.head(5)
-
+            X_float = X.astype({col: 'float64' for col in X.select_dtypes('integer').columns})
+            signature = infer_signature(X_float, final_model.predict_proba(X_float))
+            input_example = X_float.head(3)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             mlflow.xgboost.log_model(
                 final_model,
-                name="xgboost_final_model",
+                name=f"xgboost_model_{timestamp}",
                 signature=signature,
                 input_example=input_example)
+            print(f"Final model logged to mlflow as xgboost_model_{timestamp}")
 
             # Remove the preprocessing artifacts saving block since we're not using self.dp
             # Instead, log feature names and other relevant metadata
@@ -194,8 +221,10 @@ class XGBoostTrainer:
                     json.dump(feature_metadata, f, indent=2)
                 mlflow.log_artifact(metadata_path, name="feature_metadata")
                 self.logger.info(f"Feature metadata saved successfully at {metadata_path}")
+                print(f"Feature metadata saved at {metadata_path}")
             except Exception as e:
                 self.logger.error(f"Failed to save feature metadata: {str(e)}")
+                print(f"Failed to save feature metadata: {str(e)}")
                 
             return final_model, fold_metrics
 
@@ -206,8 +235,16 @@ class XGBoostTrainer:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         model_path = os.path.join(MODEL_DIR, f"xgboost_model_{timestamp}.joblib")
         joblib.dump(model, model_path)
+    # Register model
+        try:
+            mlflow.register_model(f"runs:/{self.run_id}/model", "xgb_churn_model")
+            mlflow.log_artifact(model_path, "xgb_churn_model")
 
-        print(model_path) 
+            logger.info(f"Model registered in MLflow Registry as 'xgb_churn_model'")
+        except Exception as e:
+            logger.warning(f"Failed to register model: {e}")
+
+        print(f"Model saved locally at {model_path}")
         self.logger.info(f"Final model saved locally at {model_path}")
 
 
@@ -234,4 +271,3 @@ if __name__ == "__main__":
     best_model, fold_metrics = trainer.train_and_tune_model(X, y)
     trainer.save_model(best_model)
 
-    # end
