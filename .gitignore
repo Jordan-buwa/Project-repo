@@ -14,4 +14,4 @@ push.py
 data/logs
 mlruns/
 *.joblib
-
+./models/

@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 jobs:
-  sync-data:
+  data-version-control-for-churn-data:
     runs-on: ubuntu-latest
 
     env:
@@ -30,15 +30,21 @@ jobs:
       - name: Show DVC config
         run: cat .dvc/config || echo "No DVC config found"
 
-      - name: Configure DVC remote (if needed)
+      - name: DVC remote configuration
         run: |
+          # --- For data/snapshots ---
           dvc remote add -f -d azure azure://dvc-remote/churn_data
           dvc remote modify azure account_name $AZURE_STORAGE_ACCOUNT_NAME
           dvc remote modify azure sas_token $AZURE_STORAGE_SAS_TOKEN
 
+          # --- For models ---
+          dvc remote add -f -d churn_models azure://dvc-remote/models
+          dvc remote modify churn_models account_name $AZURE_STORAGE_ACCOUNT_NAME
+          dvc remote modify churn_models sas_token $AZURE_STORAGE_SAS_TOKEN
+
       - name: Pull data from DVC remote
         run: |
-          dvc pull
+          dvc pull -r churn_data 
 
       - name: Check for data changes
         id: data_changes
@@ -49,17 +55,38 @@ jobs:
           else
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
+      - name: Check for model changes
+        id: model_changes
+        run: |
+          git status --porcelain
+          if [[ -n "$(git status --porcelain models)" ]]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Add and push updated data to DVC remote
+      - name: Add and push updated data
         if: steps.data_changes.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           dvc add data/snapshots
-          dvc push
+          dvc push -r churn_data
 
           git add data/snapshots.dvc dvc.lock
           git commit -m "Auto: Update DVC data"
           git push
+          
+      - name: Add and push updated models
+        if: steps.model_changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          dvc add models
+          dvc push -r churn_models
+
+          git add models.dvc dvc.lock
+          git commit -m "Auto: Update DVC models"
+          git push

@@ -40,6 +40,7 @@ class XGBoostTrainer:
     def __init__(self, config: dict, logger: logging.Logger):
         self.config = config
         self.logger = logger
+        self.logger.info("XGBoost trainer initialized")
 
     @staticmethod
     def find_best_threshold(y_true, y_probs):
@@ -225,8 +226,51 @@ class XGBoostTrainer:
             preproc_path = f"artifacts/preprocessor_{datetime.now().strftime('%Y%m%d_%H%M%S')}.joblib"
             joblib.dump(X, preproc_path)
             mlflow.log_artifact(preproc_path)
+            
+            from mlflow.models import infer_signature
+            signature = infer_signature(X, final_model.predict(X))
+            input_example = X.head(5)
 
-        return final_model, fold_metrics
+            mlflow.xgboost.log_model(
+                final_model,
+                name="xgboost_final_model",
+                signature=signature,
+                input_example=input_example)
+
+            # Remove the preprocessing artifacts saving block since we're not using self.dp
+            # Instead, log feature names and other relevant metadata
+            feature_metadata = {
+                "feature_names": X.columns.tolist(),
+                "n_features": len(X.columns),
+                "dtypes": {col: str(dtype) for col, dtype in X.dtypes.items()}
+            }
+            
+            # Save feature metadata as JSON
+            os.makedirs("artifacts", exist_ok=True)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            metadata_path = f"artifacts/feature_metadata_{timestamp}.json"
+            
+            try:
+                with open(metadata_path, 'w') as f:
+                    json.dump(feature_metadata, f, indent=2)
+                mlflow.log_artifact(metadata_path, name="feature_metadata")
+                self.logger.info(f"Feature metadata saved successfully at {metadata_path}")
+            except Exception as e:
+                self.logger.error(f"Failed to save feature metadata: {str(e)}")
+                
+            return final_model, fold_metrics
+
+    def save_model(self, model):
+        MODEL_DIR = os.getenv("MODEL_DIR", "models")
+        os.makedirs(MODEL_DIR, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_path = os.path.join(MODEL_DIR, f"xgboost_model_{timestamp}.joblib")
+        joblib.dump(model, model_path)
+
+        print(model_path) 
+        self.logger.info(f"Final model saved locally at {model_path}")
+
 
 
 # Main Execution
@@ -246,3 +290,4 @@ if __name__ == "__main__":
 
     trainer = XGBoostTrainer(config=config, logger=logger)
     best_model, fold_metrics = trainer.train_and_tune_model(X, y)
+    trainer.save_model(best_model)
