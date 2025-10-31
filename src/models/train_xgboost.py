@@ -1,19 +1,17 @@
 from collections import defaultdict
-from src.data_pipeline.preprocess import DataPreprocessor
 import os
 import yaml
 import joblib
 import logging
 from datetime import datetime
-import pandas as pd
-import numpy as np
 from xgboost import XGBClassifier
 from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, classification_report
 from imblearn.combine import SMOTETomek
 import mlflow
-from mlflow.models.signature import infer_signature
 import mlflow.xgboost
+from mlflow.models import infer_signature
+import json
 from src.data_pipeline.pipeline_data import fetch_preprocessed
 import warnings
 import subprocess
@@ -135,14 +133,9 @@ class XGBoostTrainer:
                     f"fold_{fold}_f1": best_f1,
                     f"fold_{fold}_roc_auc": roc,
                 })
-
-                fold_signature = infer_signature(
-                    X_val, best_model.predict(X_val))
+                #  MLflow Model Logging
                 fold_input_example = X_val.head(5)
-                mlflow.xgboost.log_model(best_model,
-                                         name=f"xgboost_model_fold_{fold}",
-                                         signature=fold_signature,
-                                         input_example=fold_input_example)
+                mlflow.xgboost.log_model(best_model, name=f"xgboost_model_fold_{fold}", input_example=fold_input_example)
 
                 fold_metrics.append({
                     "fold": fold,
@@ -211,12 +204,8 @@ class XGBoostTrainer:
             self.logger.info("\n" + classification_report(y, y_pred_full))
 
             #  MLflow Logging
-            signature = infer_signature(X, final_model.predict(X))
             input_example = X.head(5)
-            mlflow.xgboost.log_model(final_model,
-                                     name="xgboost_final_model",
-                                     signature=signature,
-                                     input_example=input_example)
+            mlflow.xgboost.log_model(final_model, name="xgboost_final_model", input_example=input_example)
             mlflow.log_metrics(
                 {"final_accuracy": acc, "final_f1": best_f1, "final_roc_auc": roc})
             mlflow.log_metric("final_threshold", best_threshold)

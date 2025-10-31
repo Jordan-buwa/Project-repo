@@ -103,7 +103,7 @@ def objective(trial, X, y, device=device):
         optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
         train_model(model, train_loader, criterion, optimizer, num_epochs=num_epochs, device=device)
-        metrics = evaluate_model(model, X_test_tensor, y_test_tensor, device=device)
+        _, metrics = evaluate_model(model, X_test_tensor, y_test_tensor, device=device)
         f1_scores.append(metrics["F1"])
 
     return np.mean(f1_scores)
