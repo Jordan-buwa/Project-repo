@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
 import os
 import joblib
 import json
 
+router = APIRouter()
 app = FastAPI(title="Model Prediction API")
 
 

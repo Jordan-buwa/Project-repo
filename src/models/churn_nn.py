@@ -52,7 +52,7 @@ study = run_optuna_optimization(X, y, n_trials=20, device=device)
 logger.info(f"Hyperparameter optimization completed!\nBest Hyperparameters: {study.best_params}\nBest AUC-ROC: {study.best_value:.4f}")
 
 print("\nBest Hyperparameters:", study.best_params)
-print(f"Best AUC-ROC: {study.best_value:.4f}")
+print(f"Best F1-score: {study.best_value:.4f}")
 
 # Train final model with best params
 best_params = study.best_params
@@ -67,7 +67,7 @@ skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 smote = SMOTE(random_state=42)
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-with mlflow.start_run(run_name=f"NN_training_{timestamp}"):
+with mlflow.start_run(run_name=f"NN_training_{timestamp}", nested=True):
     script_name = os.path.basename(__file__) if "__file__" in globals() else "notebook"
     mlflow.set_tag("script_version", script_name)
     mlflow.log_param("num_samples", X.shape[0])
