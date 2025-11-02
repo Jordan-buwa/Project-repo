@@ -135,7 +135,8 @@ class XGBoostTrainer:
                 })
                 #  MLflow Model Logging
                 fold_input_example = X_val.head(5)
-                mlflow.xgboost.log_model(best_model, name=f"xgboost_model_fold_{fold}", input_example=fold_input_example)
+                mlflow.xgboost.log_model(
+                    best_model, name=f"xgboost_model_fold_{fold}", input_example=fold_input_example)
 
                 fold_metrics.append({
                     "fold": fold,
@@ -205,7 +206,8 @@ class XGBoostTrainer:
 
             #  MLflow Logging
             input_example = X.head(5)
-            mlflow.xgboost.log_model(final_model, name="xgboost_final_model", input_example=input_example)
+            mlflow.xgboost.log_model(
+                final_model, name="xgboost_final_model", input_example=input_example)
             mlflow.log_metrics(
                 {"final_accuracy": acc, "final_f1": best_f1, "final_roc_auc": roc})
             mlflow.log_metric("final_threshold", best_threshold)
@@ -215,7 +217,7 @@ class XGBoostTrainer:
             preproc_path = f"artifacts/preprocessor_{datetime.now().strftime('%Y%m%d_%H%M%S')}.joblib"
             joblib.dump(X, preproc_path)
             mlflow.log_artifact(preproc_path)
-            
+
             from mlflow.models import infer_signature
             signature = infer_signature(X, final_model.predict(X))
             input_example = X.head(5)
@@ -233,20 +235,21 @@ class XGBoostTrainer:
                 "n_features": len(X.columns),
                 "dtypes": {col: str(dtype) for col, dtype in X.dtypes.items()}
             }
-            
+
             # Save feature metadata as JSON
             os.makedirs("artifacts", exist_ok=True)
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             metadata_path = f"artifacts/feature_metadata_{timestamp}.json"
-            
+
             try:
                 with open(metadata_path, 'w') as f:
                     json.dump(feature_metadata, f, indent=2)
                 mlflow.log_artifact(metadata_path, name="feature_metadata")
-                self.logger.info(f"Feature metadata saved successfully at {metadata_path}")
+                self.logger.info(
+                    f"Feature metadata saved successfully at {metadata_path}")
             except Exception as e:
                 self.logger.error(f"Failed to save feature metadata: {str(e)}")
-                
+
             return final_model, fold_metrics
 
     def save_model(self, model):
@@ -254,17 +257,17 @@ class XGBoostTrainer:
         os.makedirs(MODEL_DIR, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_path = os.path.join(MODEL_DIR, f"xgboost_model_{timestamp}.joblib")
+        model_path = os.path.join(
+            MODEL_DIR, f"xgboost_model_{timestamp}.joblib")
         joblib.dump(model, model_path)
 
-        print(model_path) 
+        print(model_path)
         self.logger.info(f"Final model saved locally at {model_path}")
-
 
 
 # Main Execution
 if __name__ == "__main__":
-    config_path = "config/config_train.yaml"
+    config_path = "config/config_train_xgb.yaml"
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
