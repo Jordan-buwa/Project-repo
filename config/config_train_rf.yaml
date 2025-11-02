@@ -40,14 +40,9 @@ mlflow:
 
 model:
   random_state: 42
-  test_size: 0.2
-<<<<<<< HEAD
-  n_estimators: 100          
+  test_size: 0.2          
   max_depth: null           
-=======
-  n_estimators: 100          # number of trees
-  max_depth: null            # None in Python → unlimited depth
->>>>>>> ed862b2b0c5d6b4ad459fa709457b0702429c89a
+  n_estimators: 100          # number of trees            # None in Python → unlimited depth
   min_samples_split: 2
   min_samples_leaf: 1
   max_features: "sqrt"       # allowed values: sqrt, log2, or None
@@ -55,4 +50,3 @@ model:
 
 output:
   model_dir: "models"
-
