@@ -13,9 +13,13 @@ load_dotenv()
 # Utility Functions
 
 def setup_logger(log_path: str, log_level: str = "INFO"):
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    base, ext = os.path.splitext(log_path)
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    log_path_ts = f"{base}_{timestamp}{ext}"
+
+    os.makedirs(os.path.dirname(log_path_ts), exist_ok=True)
     logging.basicConfig(
-        filename=log_path,
+        filename=log_path_ts,
         filemode="a", 
         level=getattr(logging, log_level.upper(), logging.INFO),
         format="%(asctime)s - %(levelname)s - %(message)s",
@@ -58,7 +62,7 @@ class DataIngestion:
         os.makedirs(self.output_dir, exist_ok=True)
 
     def load_data(self) -> pd.DataFrame:
-        """Ingest data based on source type (csv, database, api, kafka)."""
+        """Ingest data based on source type (csv, database)."""
         self.logger.info(f"Starting data ingestion from source: {self.source_type}")
 
         if self.source_type == "csv":
@@ -70,7 +74,7 @@ class DataIngestion:
 
         # Save raw snapshot
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(self.output_dir, f"snapshot_{timestamp}.csv")
+        output_file = os.path.join(self.output_dir, f"{self.config['file_name']}_{timestamp}.csv")
         df.to_csv(output_file, index=False)
         self.logger.info(f"Data snapshot saved: {output_file}")
 
@@ -135,6 +139,7 @@ class DataIngestion:
                     encoding=cfg.get("encoding", "utf-8")
                 )
                 self.logger.info(f"Loaded {len(df)} records from {single_path}")
+                print(f"Loaded {len(df)} records from {single_path}")
                 return df
             except Exception as e:
                 self.logger.error(f"CSV ingestion failed for {single_path}: {e}")

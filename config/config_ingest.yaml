@@ -7,12 +7,13 @@ data_source:
 
 # CSV Source (for offline / Kaggle datasets)
 csv:
-  path: "data/raw/cell2cell-duke univeristy.csv"
+  path: "data/raw/telco_churn.csv"
   test_path: 
   delimiter: ","
   encoding: "utf-8"
   has_header: true
 
+file_name: "telco_churn"
 # Database Source (for production ingestion)
 
 database:
@@ -39,7 +40,7 @@ storage:
 
 # Logging and Error Handling
 logging:
-  log_path: "src/data/logs/ingestion.log"
+  log_path: "src/data_pipeline/logs/ingestion/ingestion.log"
   log_level: "INFO"
   save_failed_batches: true
   failed_dir: "data/ingestion/failed_batches/"
