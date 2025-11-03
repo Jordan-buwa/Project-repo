@@ -15,4 +15,9 @@ data/logs
 mlruns/
 *.joblib
 models/
+<<<<<<< HEAD
 dvc_refresh.sh
+=======
+dvc_refresh.sh
+try.py
+>>>>>>> jordan_branch
