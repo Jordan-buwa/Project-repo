@@ -17,3 +17,4 @@ mlruns/
 models/
 dvc_refresh.sh
 try.py
+.pytest_cache/
