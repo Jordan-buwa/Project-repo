@@ -1,0 +1,78 @@
+# DATA CONFIGURATION
+data:
+  path: data/dataset.csv
+  target_column: churn
+
+
+# MODEL SELECTION & THRESHOLDS
+model_selection:
+  require_thresholds: true        
+  primary_metric: roc_auc         
+  performance_thresholds:
+    roc_auc: 0.75
+    f1_score: 0.60
+    accuracy: 0.70
+  model_choice:
+    - random_forest
+    - neural_network
+    - xgboost
+
+# OUTPUT PATHS
+output:
+  model_dir: models/saved_models
+  log_dir: logs
+
+# MLflow CONFIG
+mlflow:
+  tracking_uri: http://127.0.0.1:5000
+  experiment_name: Customer Churn Model Training
+
+
+# DATABASE CONNECTION
+database:
+  user: jawpostgresdb
+  host: jaw-postgresdb.postgres.database.azure.com
+  port: 5432
+  name: postgres
+  password_env_var: POSTGRES_PASSWORD  # environment variable for DB password
+
+# AZURE STORAGE CONFIG
+azure:
+  connection_string_env_var: AZURE_STORAGE_CONNECTION_STRING
+  container_name: ml-models
+
+# CROSS VALIDATION SETTINGS
+cv:
+  n_splits: 5
+  scoring: roc_auc
+  n_jobs: -1
+  verbose: 1
+
+# RANDOM SEED
+random_state: 42
+
+# HYPERPARAMETER GRIDS
+hyperparameters:
+  random_forest:
+    n_estimators: [100, 200]
+    max_depth: [None, 10, 20]
+    min_samples_split: [2, 5]
+  neural_network:
+    hidden_layer_sizes: [[64, 32], [128, 64]]
+    activation: ['relu', 'tanh']
+    solver: ['adam']
+    learning_rate_init: [0.001, 0.01]
+    max_iter: [300]
+  xgboost:
+    n_estimators: [100, 200]
+    learning_rate: [0.05, 0.1]
+    max_depth: [3, 6, 10]
+    subsample: [0.8, 1.0]
+
+# EVALUATION METRICS
+evaluation_metrics:
+  - accuracy
+  - precision
+  - recall
+  - f1_score
+  - roc_auc
