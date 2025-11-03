@@ -15,3 +15,9 @@ mlflow
 torch
 optuna
 optuna-integration[mlflow]
+uvicorn[standard]
+pydantic
+httpx
+pytest
+fastapi
+pytest-asyncio

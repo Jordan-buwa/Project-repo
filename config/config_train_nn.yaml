@@ -4,6 +4,8 @@ target_column: "churn"
 training:
   num_epochs: 20
   n_trials: 20
+  random_state: 42
+  num_splits_cv: 5
 
 optuna:
   n_layers:

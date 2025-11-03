@@ -1,6 +1,6 @@
 outs:
-- md5: 21d802d5735849f630f1844d8f450aa9.dir
-  size: 65285121
-  nfiles: 3
+- md5: 0b98ed3a0fab5159ef912d67d2d95dd5.dir
+  size: 1109847057
+  nfiles: 51
   hash: md5
   path: snapshots

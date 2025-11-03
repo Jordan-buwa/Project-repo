@@ -1,3 +1,6 @@
+import os, sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
 from src.data_pipeline.ingest import DataIngestion
 from src.data_pipeline.preprocess import DataPreprocessor
 from src.data_pipeline.validate_after_preprocess import validate_dataframe

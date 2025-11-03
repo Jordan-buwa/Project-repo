@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
 import os
 import joblib
 import json
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
+router = APIRouter()
 app = FastAPI(title="Model Metrics API")
 
 

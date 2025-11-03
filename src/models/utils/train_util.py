@@ -1,6 +1,7 @@
 import torch
 from src.data_pipeline.ingest import setup_logger
 import os
+import mlflow
 import logging
 from datetime import datetime
 
@@ -22,7 +23,10 @@ def train_model(model, train_loader, criterion, optimizer, num_epochs=20, device
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
+        
         avg_loss = running_loss / len(train_loader)
+        mlflow.log_metrics({"train_loss": avg_loss}, step=epoch)
+        mlflow.end_run()
         if epoch % 10 == 0 or epoch == num_epochs - 1:
             print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss:.4f}")
-    return avg_loss
+    return model, avg_loss

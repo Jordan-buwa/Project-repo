@@ -1,10 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import HTTPException, APIRouter
 import os
 import joblib
 import json
 
-app = FastAPI(title="Model Prediction API")
-
+router = APIRouter()
 
 def get_latest_model(model_type: str):
     model_ext = ".pth" if model_type == "neural-net" else ".joblib"
@@ -32,7 +31,7 @@ def load_model(model_path: str, model_type: str):
         return joblib.load(model_path)
 
 
-@app.post("/predict/{model_type}")
+@router.post("/predict/{model_type}")
 def predict(model_type: str):
     # Load features directly from JSON
     input_path = os.path.join(os.path.dirname(__file__), "predict_input.json")

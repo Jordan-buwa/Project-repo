@@ -50,6 +50,7 @@ class OptunaLogger:
             self.logger.warning(f"[Trial {trial.number}] Pruned")
         elif trial.state == optuna.trial.TrialState.FAIL:
             self.logger.error(f"[Trial {trial.number}] Failed")
+        
 
 optuna_logger = OptunaLogger(logger)
 
