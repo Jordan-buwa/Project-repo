@@ -1,0 +1,69 @@
+# Validation API configuration for production data
+
+# Source Configuration Dependencies
+
+dependencies:
+preprocessing_config: config/config_preprocess.yaml
+training_config: config/config_train.yaml
+reference_data_root: data/reference/
+active_model_registry: src/models/registry.json   # local or MLflow-synced metadata
+
+# Validation Behavior
+
+data_validation:
+cache_file: src/api/cache/data_validation_cache.json
+allow_dynamic_columns: false
+allow_missing_values: false
+validation_cache_ttl: 0
+drift_threshold: 0.5
+retrain_on_drift: true
+enable_drift_check: true
+schema_alignment_mode: strict
+reference_sampling_fraction: 0.2
+
+# Model Awareness
+
+model_registry:
+fetch_from_mlflow: true
+mlflow_model_stage: Production
+local_backup_path: models/active/
+
+# Explicit registered models with experiment mapping
+
+registered_models:
+random_forest:
+name: customer_churn_rf_model
+experiment_name: Customer Churn Model Training
+xgboost:
+name: customer_churn_xgb_model
+experiment_name: Customer Churn Model Training
+neural_network:
+name: customer_churn_nn_model
+experiment_name: Customer Churn Model Training
+
+# Logging and Monitoring
+
+logging:
+path: src/api/logs/data_validation.log
+level: INFO
+enable_audit_trail: true
+log_retention_days: 30
+
+# API-Specific Operational Parameters
+
+api_runtime:
+batch_validation_limit: 1000
+enable_parallel_validation: true
+health_check_frequency: 60
+enable_auto_cleanup: true
+
+# Model Selection (without duplicating schema)
+model_selection:
+choices:
+- random_forest
+- xgboost
+- neural_network
+default:
+- random_forest
+- xgboost
+- neural_network
