@@ -1,15 +1,31 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
 from pydantic import BaseModel
 import subprocess
+from dotenv import load_dotenv
 import os
+import sys
 import uuid
 import logging
 from datetime import datetime
 from typing import Dict, Optional
 from pathlib import Path
+load_dotenv()
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent  # adjust as needed
+sys.path.append(str(REPO_ROOT))  # make it importable
+
+os.environ["REPO_ROOT"] = str(REPO_ROOT)
+os.environ["PYTHONPATH"] = str(REPO_ROOT)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+log_path = "src/api/logs/"
+os.makedirs(log_path, exist_ok=True)
+log_file = os.path.join(log_path, 'training_jobs.log')
+logging.basicConfig(
+    filename=log_file,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO)
 
 # Training job registry (use Redis or database in production)
 training_jobs: Dict[str, Dict] = {}
@@ -37,14 +53,19 @@ class JobStatusResponse(BaseModel):
     logs: Optional[str] = None
 
 def validate_training_script(script_path: str) -> str:
-    """Validate that the training script exists."""
+    """Validate that the training script exists (resolve relative to repo root)."""
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent  # project root
     path = Path(script_path)
-    if not path.exists():
+    if not path.is_absolute():
+        candidate = repo_root / path
+    else:
+        candidate = path
+    if not candidate.exists():
         raise HTTPException(
             status_code=404, 
-            detail=f"Training script not found: {script_path}"
+            detail=f"Training script not found: {candidate}"
         )
-    return str(path)
+    return str(candidate)
 
 def create_job_id() -> str:
     """Generate a unique job ID."""
@@ -74,12 +95,30 @@ def run_training_script(script_path: str, job_id: str, model_type: str):
         
         logger.info(f"Starting training job {job_id} for {model_type}")
         
-        # Run the training script
+        # Ensure subprocess runs with repository root on PYTHONPATH so `import src` works
+        repo_root = os.getenv("REPO_ROOT")
+        
+        # If the script lives under src/, prefer running it as a module to preserve package imports
+        rel_path = Path(script_path).relative_to(repo_root) if Path(script_path).is_absolute() else Path(script_path)
+        run_cmd = None
+        if str(rel_path).startswith("src" + os.sep) or str(rel_path).startswith("src/"):
+            # convert src/models/train_xgboost.py -> src.models.train_xgboost
+            module = str(rel_path).replace(os.sep, ".")
+            if module.endswith(".py"):
+                module = module[:-3]
+            run_cmd = [sys.executable, "-m", module]
+        else:
+            run_cmd = [sys.executable, script_path]
+        
+        logger.info(f"Running command: {' '.join(run_cmd)} (cwd={repo_root})")
+        
         result = subprocess.run(
-            ["python", script_path],
+            run_cmd,
             capture_output=True,
             text=True,
-            check=True
+            check=True,
+            cwd=repo_root,
+            env=os.environ
         )
         
         # Update job status on success
@@ -100,8 +139,8 @@ def run_training_script(script_path: str, job_id: str, model_type: str):
         training_jobs[job_id]["status"] = "failed"
         training_jobs[job_id]["completed_at"] = datetime.utcnow().isoformat()
         training_jobs[job_id]["error"] = f"Script execution failed: {e.stderr}"
-        training_jobs[job_id]["logs"] = e.stdout + "\n" + e.stderr
-        logger.error(f"Training failed for job {job_id}: {e.stderr}")
+        training_jobs[job_id]["logs"] = (e.stdout or "") + "\n" + (e.stderr or "")
+        logger.error(f"Training failed for job {job_id}: {e.stderr}\nCmd: {getattr(e, 'cmd', None)}")
         
     except Exception as e:
         training_jobs[job_id]["status"] = "failed"

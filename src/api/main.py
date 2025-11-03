@@ -12,6 +12,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from api.ml_models import load_all_models, clear_models, get_all_models_info
 from api.routers import predict, train, validate, metrics
 
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -54,7 +55,6 @@ async def lifespan(app: FastAPI):
         logger.info("Cleared models from memory")
     except Exception as e:
         logger.error(f"Error during shutdown: {str(e)}")
-
 # Create FastAPI app with lifespan
 app = FastAPI(
     title="Churn Prediction API",
@@ -71,7 +71,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # Exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -85,10 +84,10 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # Include routers
-app.include_router(predict.router, prefix="/api/v1", tags=["predictions"])
-app.include_router(train.router, prefix="/api/v1", tags=["training"])
+app.include_router(predict.router, tags=["predictions"])
+app.include_router(train.router, tags=["training"])
 #app.include_router(validate.router, prefix="/api/v1", tags=["validation"])
-app.include_router(metrics.router, prefix="/api/v1", tags=["metrics"])
+app.include_router(metrics.router, tags=["metrics"])
 
 @app.get("/")
 async def root():
@@ -99,7 +98,7 @@ async def root():
         "endpoints": {
             "docs": "/docs",
             "health": "/health",
-            "models": "/api/v1/models"
+            "models": "/models"
         }
     }
 
@@ -119,7 +118,7 @@ async def health_check():
         "models": models_info
     }
 
-@app.get("/api/v1/models")
+@app.get("/models")
 async def get_models_status():
     """Get status of all loaded models"""
     return {

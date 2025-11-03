@@ -1,4 +1,3 @@
-import os
 import yaml
 from dotenv import load_dotenv
 import pandas as pd
@@ -14,7 +13,9 @@ from sklearn.ensemble import RandomForestClassifier
 from imblearn.combine import SMOTETomek
 import warnings
 import subprocess
-
+import os, sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
 # Importing dataframe validation function
 from src.data_pipeline.pipeline_data import fetch_preprocessed
 
@@ -25,6 +26,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # Loading environment variables
 load_dotenv()
 MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
+os.environ["MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING"] = "true"
 
 # Logging setup
 os.makedirs("logs", exist_ok=True)

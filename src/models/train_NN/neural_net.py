@@ -19,3 +19,9 @@ class ChurnNN(nn.Module):
 
     def forward(self, x):
         return self.network(x)
+    def predict_proba(self, X_test):
+        X_test = torch.tensor(X_test, dtype=torch.float32)
+        self.eval()
+        with torch.no_grad():
+            probabilities = self.forward(X_test)
+        return probabilities.numpy()

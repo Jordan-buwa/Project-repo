@@ -32,7 +32,7 @@ def get_model_path(model_type: str) -> Path:
         FileNotFoundError: If no matching model is found.
         ValueError: If the model_type is unknown.
     """
-    models_dir = Path("models")
+    models_dir = Path("models/")
     if not models_dir.exists() or not models_dir.is_dir():
         raise FileNotFoundError(f"Models directory not found: {models_dir}")
 

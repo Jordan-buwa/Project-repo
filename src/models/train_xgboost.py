@@ -1,5 +1,5 @@
 from collections import defaultdict
-import os
+import os, sys
 import yaml
 import joblib
 import logging
@@ -12,12 +12,15 @@ import mlflow
 import mlflow.xgboost
 from mlflow.models import infer_signature
 import json
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
 from src.data_pipeline.pipeline_data import fetch_preprocessed
 import warnings
 import subprocess
 
 [warnings.filterwarnings("ignore", category=c)
  for c in (UserWarning, FutureWarning)]
+os.environ["MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING"] = "true"
 
 
 # Logger Setup
