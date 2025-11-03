@@ -16,3 +16,4 @@ mlruns/
 *.joblib
 models/
 dvc_refresh.sh
+try.py
