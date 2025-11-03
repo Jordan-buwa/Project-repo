@@ -1,6 +1,0 @@
-artifact_location: /Users/wycliffenzomo/Documents/pro/Project-repo/${MLFLOW_TRACKING_URI}/535326840500184338
-creation_time: 1761837905686
-experiment_id: '535326840500184338'
-last_update_time: 1761837905686
-lifecycle_stage: active
-name: ${MLFLOW_EXPERIMENT_NAME}
