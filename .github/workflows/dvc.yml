@@ -33,9 +33,9 @@ jobs:
       - name: DVC remote configuration
         run: |
           # --- For data/snapshots ---
-          dvc remote add -f -d azure azure://dvc-remote/churn_data
-          dvc remote modify azure account_name $AZURE_STORAGE_ACCOUNT_NAME
-          dvc remote modify azure sas_token $AZURE_STORAGE_SAS_TOKEN
+          dvc remote add -f -d azureblob azure://dvc-remote/churn_data
+          dvc remote modify azureblob account_name $AZURE_STORAGE_ACCOUNT_NAME
+          dvc remote modify azureblob sas_token $AZURE_STORAGE_SAS_TOKEN
 
           # --- For models ---
           dvc remote add -f -d churn_models azure://dvc-remote/models
