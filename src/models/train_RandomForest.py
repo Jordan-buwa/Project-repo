@@ -1,4 +1,5 @@
 import yaml
+import json
 from dotenv import load_dotenv
 import pandas as pd
 import numpy as np
@@ -13,8 +14,10 @@ from sklearn.ensemble import RandomForestClassifier
 from imblearn.combine import SMOTETomek
 import warnings
 import subprocess
-import os, sys
+import os
+import sys
 from pathlib import Path
+
 sys.path.append(str(Path(__file__).parent.parent))
 # Importing dataframe validation function
 from src.data_pipeline.pipeline_data import fetch_preprocessed
@@ -28,18 +31,18 @@ load_dotenv()
 MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
 os.environ["MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING"] = "true"
 
-# Logging setup
-os.makedirs("logs", exist_ok=True)
-logging.basicConfig(
-    filename="logs/train_rf.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
 # Loading training config
 with open("config/config_train_rf.yaml", "r") as f:
     train_config = yaml.safe_load(f)
+
+# Logging setup - ADJUSTED: Use config values
+os.makedirs(os.path.dirname(train_config["logging"]["log_path"]), exist_ok=True)
+logging.basicConfig(
+    filename=train_config["logging"]["log_path"],
+    level=getattr(logging, train_config["logging"]["log_level"]),
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 TARGET_COL = train_config["data"]["target_column"]
 MODEL_DIR = train_config.get("output", {}).get("model_dir", "models")
@@ -67,7 +70,7 @@ if smote_sampler:
 if not MLFLOW_URI:
     raise ValueError("MLFLOW_TRACKING_URI not found in .env")
 mlflow.set_tracking_uri(MLFLOW_URI)
-mlflow.set_experiment("Random forest for Churn Model")
+mlflow.set_experiment(train_config["experiment_name"])  # ADJUSTED: Use config value
 logger.info(f"MLflow tracking URI: {MLFLOW_URI}")
 
 # Tagging MLflow run with DVC data hash for lineage
@@ -77,6 +80,45 @@ dvc_hash = subprocess.getoutput("dvc hash data/processed/preprocessed.csv")
 available_models = {
     "random_forest": RandomForestClassifier(random_state=train_config["model"]["random_state"])
 }
+
+def save_data_schema(X: pd.DataFrame, y: pd.Series, target_col: str, model_type: str, model_version: str):
+    """Save data schema both locally and to MLflow with organized structure"""
+    schema = {
+        "model_type": model_type,
+        "model_version": model_version,
+        "required_columns": X.columns.tolist(),
+        "dtypes": {col: str(dtype) for col, dtype in X.dtypes.items()},
+        "target_column": target_col,
+        "schema_version": "1.0",
+        "timestamp": datetime.now().isoformat(),
+        "feature_count": X.shape[1],
+        "sample_count": X.shape[0],
+        "class_distribution": y.value_counts().to_dict(),
+        "training_data_hash": dvc_hash
+    }
+    
+    # Saving schema locally in organized structure
+    schemas_dir = os.path.join(MODEL_DIR, model_type, "schemas")
+    os.makedirs(schemas_dir, exist_ok=True)
+    local_schema_path = os.path.join(schemas_dir, f"{model_version}_schema.json")
+    
+    with open(local_schema_path, 'w') as f:
+        json.dump(schema, f, indent=2)
+    logger.info(f"Schema saved locally at: {local_schema_path}")
+    
+    # Saving schema to MLflow
+    mlflow_schema_path = "schema.json"
+    with open(mlflow_schema_path, 'w') as f:
+        json.dump(schema, f, indent=2)
+    
+    mlflow.log_artifact(mlflow_schema_path, "schema")
+    logger.info(f"Schema saved to MLflow artifacts")
+    
+    # Cleaning up temp file
+    if os.path.exists(mlflow_schema_path):
+        os.remove(mlflow_schema_path)
+    
+    return schema, local_schema_path
 
 # Function to evaluate models
 def evaluate_models(X, y, train_config):
@@ -120,8 +162,11 @@ def evaluate_models(X, y, train_config):
             mlflow.set_tag("smotetomek_applied", str(apply_smotetomek))
             mlflow.set_tag("random_state", str(train_config["model"]["random_state"]))
             mlflow.set_tag("preprocess_columns", ",".join(train_config.get("preprocessing", {}).get("drop_columns", [])))
+            
+            # Logging parameters
             mlflow.log_param("num_samples", X.shape[0])
             mlflow.log_param("num_features", X.shape[1])
+            mlflow.log_param("target_column", TARGET_COL)
 
             grid.fit(X, y)
             best_model = grid.best_estimator_
@@ -150,7 +195,7 @@ def evaluate_models(X, y, train_config):
             avg_metrics = {k: np.nanmean([m[k] for m in fold_metrics]) for k in fold_metrics[0]}
             mlflow.log_metrics(avg_metrics)
 
-            # Store best models passing thresholds
+            # Storing best models passing thresholds
             if all(avg_metrics.get(m, 0) >= t for m, t in thresholds.items()):
                 best_models[name] = (best_model, avg_metrics)
                 logger.info(f"Model {name} passed thresholds: {avg_metrics}")
@@ -174,17 +219,50 @@ best_model_name, best_model, best_metrics, run_id = evaluate_models(X, y, train_
 # Saving & logging best model
 if best_model_name:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    local_model_path = os.path.join(MODEL_DIR, f"rf_model_{timestamp}.joblib")
+    
+    # Organizing directory structure
+    model_type = "random_forest"
+    versions_dir = os.path.join(MODEL_DIR, model_type, "versions")
+    os.makedirs(versions_dir, exist_ok=True)
+    
+    # Creating version name
+    model_version_name = f"rf_churn_v{timestamp}"
+    local_model_path = os.path.join(versions_dir, f"{model_version_name}.joblib")
     joblib.dump(best_model, local_model_path)
     logger.info(f"Best model saved locally at: {local_model_path}")
-    mlflow.sklearn.log_model(best_model, name=f"random_forest_{timestamp}", input_example=X.iloc[:5])
-
-    # Registering in MLflow Model Registry
-    try:
-        mlflow.register_model(f"runs:/{run_id}/model", "rf_churn_model")
-        mlflow.log_artifact(local_model_path, "rf_churn_model")
-
-        logger.info(f"Model registered in MLflow Registry as 'rf_churn_model'")
-    except Exception as e:
-        logger.warning(f"Failed to register model: {e}")
-logger.info(f"Training completed. Best model: {best_model_name} with metrics: {best_metrics}")
+    
+    # Saving schema to both locations
+    schema, local_schema_path = save_data_schema(X, y, TARGET_COL, model_type, model_version_name)
+    
+    # Logging model to MLflow with model type in name
+    mlflow_registry_name = f"{model_type}_churn_model"
+    mlflow.sklearn.log_model(
+        best_model, 
+        artifact_path="model",
+        registered_model_name=mlflow_registry_name,
+        input_example=X.iloc[:5]
+    )
+    
+    # Logging additional metadata
+    mlflow.log_param("model_type", model_type)
+    mlflow.log_param("model_version", model_version_name)
+    mlflow.log_param("local_schema_path", local_schema_path)
+    mlflow.log_param("local_model_path", local_model_path)
+    mlflow.log_artifact(local_model_path, "local_model")
+    
+    logger.info(f"Model registered in MLflow as '{mlflow_registry_name}'")
+    logger.info(f"Training completed. Best model: {best_model_name} with metrics: {best_metrics}")
+    
+    # Printing summary
+    print(f"\n=== TRAINING COMPLETED ===")
+    print(f"Model Type: {model_type}")
+    print(f"Model Version: {model_version_name}")
+    print(f"Local Model Path: {local_model_path}")
+    print(f"Local Schema Path: {local_schema_path}")
+    print(f"MLflow Model: {mlflow_registry_name}")
+    print(f"Performance Metrics: {best_metrics}")
+    print(f"Features: {X.shape[1]}, Samples: {X.shape[0]}")
+    
+else:
+    logger.error("No model met the performance thresholds")
+    print("Training failed: No model met the performance thresholds")

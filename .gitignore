@@ -14,7 +14,7 @@ push.py
 data/logs
 mlruns/
 *.joblib
-models/
 dvc_refresh.sh
 try.py
 .pytest_cache/
+/models

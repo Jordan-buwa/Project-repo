@@ -4,3 +4,5 @@
 /raw
 /snapshots
 dvc.yml
+/production
+/validated
