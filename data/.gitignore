@@ -1,6 +1,5 @@
-/processed
-/metadata
 /ingestion
-/raw
 /snapshots
+/raw
+/processed
 dvc.yml
