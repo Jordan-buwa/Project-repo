@@ -22,7 +22,7 @@ src/models/
 | **POST** | `/train` | Start training with configuration (supports "all" models) |
 | **GET** | `/train/status/{job_id}` | Get the current status of a training job |
 | **GET** | `/train/jobs` | List recent or filtered training jobs |
-| **DELETE** | `/train/job/{job_id}` | Cancel a training job. **(Note: This is a soft cancel, it updates the job status but does not terminate the running script process)** |
+| **DELETE** | `/train/job/{job_id}` | Cancel a training job. **(Note: This is a soft cancel, it updates the job status but does not terminate the running script process) |
 | **GET** | `/train/models/available` | Get list of available trained model files |
 
 ---
