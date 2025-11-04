@@ -1,0 +1,70 @@
+stages:
+  ingest:
+    cmd: python -m src.data_pipeline.ingest
+    deps:
+      - src/data_pipeline/ingest.py
+      - config/config_ingest.yaml
+    outs:
+      - data/raw
+      - data/metadata
+  
+  preprocess:
+    cmd: python -m src.data_pipeline.preprocess
+    deps:
+      - src/data_pipeline/preprocess.py
+      - src/data_pipeline/ingest.py
+      - config/config_process.yaml
+      - data/raw
+    outs:
+      - data/processed
+      - src/data_pipeline/preprocessing_artifacts.json
+      - src/data_pipeline/preprocessing_artifacts.pkl
+    metrics:
+      - artifacts/feature_metadata.json:
+          cache: false
+
+  validate:
+    cmd: python -m src.data_pipeline.validate_after_preprocess
+    deps:
+      - src/data_pipeline/validate_after_preprocess.py
+      - data/processed
+      - config/config_process.yaml
+    metrics:
+      - logs/validation_metrics.json:
+          cache: false
+
+  train_xgboost:
+    cmd: python -m src.models.train_xgboost
+    deps:
+      - src/models/train_xgboost.py
+      - data/processed
+      - config/config_train.yaml
+    params:
+      - config/config_train.yaml:
+          - model.xgboost
+    outs:
+      - models/xgboost
+
+  train_random_forest:
+    cmd: python -m src.models.train_RandomForest  
+    deps:
+      - src/models/train_RandomForest.py
+      - data/processed
+      - config/config_train_rf.yaml
+    params:
+      - config/config_train_rf.yaml:
+          - model.random_forest
+    outs:
+      - models/random_forest
+
+  train_neural_net:
+    cmd: python -m src.models.churn_nn
+    deps:
+      - src/models/churn_nn.py
+      - data/processed
+      - config/config_train_nn.yaml
+    params:
+      - config/config_train_nn.yaml:
+          - model.neural_net
+    outs:
+      - models/neural_net
