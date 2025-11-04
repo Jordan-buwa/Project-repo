@@ -375,6 +375,23 @@ def save_enhanced_preprocessing_artifacts(preprocessor_instance):
     Add this to your DataPreprocessor class or call it after run_preprocessing_pipeline.
     """
     
+    def convert_numpy_types(obj):
+        """Convert numpy types to native Python types for JSON serialization"""
+        if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
+            return float(obj)
+        elif isinstance(obj, (np.ndarray,)):
+            return obj.tolist()
+        elif isinstance(obj, (np.bool_)):
+            return bool(obj)
+        elif isinstance(obj, dict):
+            return {key: convert_numpy_types(value) for key, value in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [convert_numpy_types(item) for item in obj]
+        else:
+            return obj
+    
     # Calculate fill values for missing data
     num_fill_values = {}
     for col in preprocessor_instance.num_cols:
@@ -407,17 +424,20 @@ def save_enhanced_preprocessing_artifacts(preprocessor_instance):
         "numerical_fill_values": num_fill_values,
         "categorical_fill_values": cat_fill_values,
         
-        "preprocessing_timestamp": pd.Timestamp.utcnow().isoformat(),
+        "preprocessing_timestamp": datetime.utcnow().isoformat(),
         "n_samples": len(preprocessor_instance.df),
         "n_features": len(preprocessor_instance.df.columns)
     }
+    
+    # Convert all numpy types to native Python types
+    artifacts = convert_numpy_types(artifacts)
     
     # Save artifacts
     artifacts_path = "src/data_pipeline/preprocessing_artifacts.json"
     os.makedirs(os.path.dirname(artifacts_path), exist_ok=True)
     
     with open(artifacts_path, "w") as f:
-        json.dump(artifacts, f, indent=2)
+        json.dump(artifacts, f, indent=2, default=str)  # Added default=str as extra safety
     
     # Also save a pickle backup for complex objects if needed
     pickle_path = "src/data_pipeline/preprocessing_artifacts.pkl"
