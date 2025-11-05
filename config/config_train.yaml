@@ -2,8 +2,7 @@
 data:
   path: data/dataset.csv
   target_column: churn
-
-
+  
 # MODEL SELECTION & THRESHOLDS
 model_selection:
   require_thresholds: true        

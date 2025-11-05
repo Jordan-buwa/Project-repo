@@ -40,3 +40,4 @@ httpx
 # Development & Testing
 pytest
 pytest-asyncio
+requests-mock
