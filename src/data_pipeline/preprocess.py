@@ -15,6 +15,8 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 load_dotenv()
 
 #  Setup Logging
+
+
 def setup_logger(log_path: str, log_level: str = "INFO"):
     base, ext = os.path.splitext(log_path)
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -23,11 +25,12 @@ def setup_logger(log_path: str, log_level: str = "INFO"):
     os.makedirs(os.path.dirname(log_path_ts), exist_ok=True)
     logging.basicConfig(
         filename=log_path_ts,
-        filemode="a", 
+        filemode="a",
         level=getattr(logging, log_level.upper(), logging.INFO),
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
     return logging.getLogger(__name__)
+
 
 class DataPreprocessor:
     def __init__(self, config_path: str = "config/config_process.yaml", data_raw: pd.DataFrame = None):
@@ -45,7 +48,7 @@ class DataPreprocessor:
         self.target_col = self.config["target_column"]
         self.num_cols = self.config["numerical_features"]
         self.cat_cols = self.config["categorical_features"]
-        self.drop_col = self.config["drop_columns"] + ['overage', 'outcalls', 'incalls', 'models']
+        self.drop_col = self.config["drop_columns"]
 
         # For encoding and scaling
         self.label_encoders = {}
@@ -58,41 +61,74 @@ class DataPreprocessor:
         )
 
     # Feature Engineering
-
     def combine_cols(self):
-        """Create derived features"""
+        """Create derived features safely (skip if raw columns missing)"""
         self.logger.info("Creating derived features...")
-        self.df["engagement_index"] = (
-            self.df["outcalls"] + self.df["incalls"]) / (self.df["months"] + 1)
-        self.df["model_change_rate"] = self.df["models"] / \
-            (self.df["months"] + 1)
-        self.df["overage_ratio"] = self.df["overage"] / \
-            (self.df["revenue"] + 1)
-        self.logger.info("Derived features added successfully.")
-        self.num_cols += self.config["combined_features"]      
 
-    def remove_unnecessary_columns(self):
-        """Drop unneeded columns"""
-        self.logger.info("Dropping unnecessary columns...")
-        for col in self.drop_col:
-            if col in self.df.columns:
-                self.df.drop(columns=col, inplace=True)
-                self.logger.info(f"Removed column: {col}")
-        self.num_cols = [col for col in self.num_cols if col not in self.drop_col]
-        self.cat_cols = [col for col in self.cat_cols if col not in self.drop_col]
+        def safe_addition(*cols):
+            return sum(self.df[col] if col in self.df.columns else 0 for col in cols)
+
+        def safe_divide(numerator, denominator):
+            return numerator / (denominator + 1e-6)  # avoid divide by zero
+
+        df = self.df
+
+        if all(col in df.columns for col in ["outcalls", "incalls", "months"]):
+            df["engagement_index"] = safe_divide(
+                df["outcalls"] + df["incalls"], df["months"])
+        if all(col in df.columns for col in ["models", "months"]):
+            df["model_change_rate"] = safe_divide(df["models"], df["months"])
+        if all(col in df.columns for col in ["overage", "revenue"]):
+            df["overage_ratio"] = safe_divide(df["overage"], df["revenue"])
+        if all(col in df.columns for col in ["mou", "mourec", "outcalls", "incalls", "peakvce", "opeakvce"]):
+            df["call_activity_score"] = df["mou"] + df["mourec"] + 0.5 * \
+                safe_addition("outcalls", "incalls", "peakvce", "opeakvce")
+        if all(col in df.columns for col in ["dropvce", "blckvce", "unansvce", "dropblk"]):
+            df["call_quality_issues"] = safe_addition(
+                "dropvce", "blckvce", "unansvce", "dropblk")
+        if all(col in df.columns for col in ["custcare", "retcalls", "retaccpt"]):
+            df["cust_engagement_score"] = df["custcare"] + \
+                df["retcalls"] + 2 * df["retaccpt"]
+        if all(col in df.columns for col in ["overage", "directas", "recchrge"]):
+            df["overuse_behavior"] = df["overage"] + \
+                0.5 * safe_addition("directas", "recchrge")
+        if all(col in df.columns for col in ["models", "eqpdays", "refurb"]):
+            df["device_tenure_index"] = 0.5 * df["models"] + \
+                (df["eqpdays"] / 100) + df["refurb"]
+        if all(col in df.columns for col in ["age1", "age2", "children", "income"]):
+            df["demographic_index"] = (
+                (df["age1"] + df["age2"]) / 2) + df["children"] * 2 + (df["income"] / 10000)
+        if all(col in df.columns for col in ["credita", "creditaa", "prizmub", "prizmtwn"]):
+            df["socio_tier"] = df["credita"] + 2 * \
+                df["creditaa"] + df["prizmub"] + 0.5 * df["prizmtwn"]
+        if all(col in df.columns for col in ["occprof", "occcler", "occcrft", "occret", "occself"]):
+            df["occupation_class"] = safe_addition(
+                "occprof", "occcler", "occcrft", "occret", "occself")
+        if all(col in df.columns for col in ["ownrent", "marryyes", "pcown", "creditcd", "travel", "truck", "rv"]):
+            df["household_lifestyle_score"] = safe_addition(
+                "ownrent", "marryyes", "pcown", "creditcd", "travel", "truck", "rv")
+        if all(col in df.columns for col in ["changem", "changer", "newcelly", "newcelln", "refer"]):
+            df["churn_change_score"] = safe_addition(
+                "changem", "changer", "newcelly", "newcelln") - 0.5 * df["refer"]
+
+        # Only add derived features that were successfully created
+        created_features = [col for col in self.config.get(
+            "combined_features", []) if col in df.columns]
+        self.num_cols += created_features
+        self.logger.info(f"Derived features added: {created_features}")
 
     def handle_missing_values(self):
         """Fill missing values for numerical and categorical"""
         self.logger.info("Handling missing values...")
         for col in self.num_cols:
             if self.df[col].isnull().any():
-                self.df.fillna({col : self.df[col].median()}, inplace=True)
+                self.df.fillna({col: self.df[col].median()}, inplace=True)
 
         for col in self.cat_cols:
             if self.df[col].isnull().any():
                 fill_value = self.df[col].mode(
                 )[0] if not self.df[col].mode().empty else "Unknown"
-                self.df.fillna({col : fill_value}, inplace=True)
+                self.df.fillna({col: fill_value}, inplace=True)
 
     def encode_categorical_variables(self):
         """Encode categorical features"""
@@ -120,6 +156,32 @@ class DataPreprocessor:
         self.df[self.num_cols] = self.scaler.fit_transform(
             self.df[self.num_cols])
 
+    def remove_unnecessary_columns(self):
+        """Drop unnecessary raw columns, keeping derived features intact"""
+        self.logger.info("Dropping unnecessary columns...")
+
+        # Start with explicitly configured drop columns
+        cols_to_drop = set(self.drop_col)
+
+        # Automatically keep all derived features
+        derived_features = set(self.config.get("combined_features", []))
+        # Only drop columns that are not in derived features or target
+        raw_cols_to_drop = set(self.df.columns) - \
+            derived_features - {self.target_col}
+        cols_to_drop.update(raw_cols_to_drop)
+
+        # Drop columns safely
+        for col in cols_to_drop:
+            if col in self.df.columns:
+                self.df.drop(columns=col, inplace=True)
+                self.logger.info(f"Removed column: {col}")
+
+        # Update numerical and categorical lists
+        self.num_cols = [
+            col for col in self.num_cols if col in self.df.columns]
+        self.cat_cols = [
+            col for col in self.cat_cols if col in self.df.columns]
+
     # Save Processed Data
 
     def save_preprocessed_data(self):
@@ -143,13 +205,16 @@ class DataPreprocessor:
         with open("src/data_pipeline/preprocessing_artifacts.json", "w") as f:
             json.dump(artifacts, f, indent=2)
         self.logger.info("Processed data saved locally.")
-        #self.logger.info("Saving processed data to PostgreSQL...")
-        #self.database_save()
-
+        # self.logger.info("Saving processed data to PostgreSQL...")
+        # self.database_save()
 
     def database_save(self):
+<<<<<<< HEAD
+        # PostgreSQL snapshot (optional)
+=======
         """Save processed data snapshot to PostgreSQL"""
         self.logger.info("Saving processed data snapshot to PostgreSQL...")
+>>>>>>> upstream/main
         try:
             DB_USER = os.getenv("POSTGRES_USER", "jawpostgresdb")
             DB_PASS = os.getenv("POSTGRES_PASSWORD")
@@ -182,6 +247,7 @@ class DataPreprocessor:
             self.logger.error(
                 f"Failed to save processed data to PostgreSQL: {e}")
             raise
+
     # Preprocessing Pipeline
 
     def run_preprocessing_pipeline(self):
@@ -190,11 +256,11 @@ class DataPreprocessor:
         self.logger.info("Starting full preprocessing pipeline...")
         print("Starting full preprocessing pipeline...")
         self.combine_cols()
-        self.remove_unnecessary_columns()
         self.handle_missing_values()
         self.encode_categorical_variables()
         self.encode_target_variable()
         self.feature_scaling()
+        self.remove_unnecessary_columns()
         self.save_preprocessed_data()
 
         if self.df.isnull().any().any():
