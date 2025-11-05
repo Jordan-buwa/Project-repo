@@ -60,6 +60,6 @@ for i in {1..30}; do
 done
 
 echo "API failed to start within 60 seconds"
-echo "Check logs: ./docker/scripts/logs-api.sh"
+echo "Check logs: ./docker/api/scripts/logs-api.sh"
 docker-compose -f docker-compose.api.yml logs churn-api-jaw
 exit 1
