@@ -40,7 +40,7 @@ storage:
 
 # Logging and Error Handling
 logging:
-  log_path: "src/data_pipeline/logs/ingestion/ingestion.log"
+  log_path: "src/data_pipeline/logs/ingestion/"
   log_level: "INFO"
   save_failed_batches: true
   failed_dir: "data/ingestion/failed_batches/"
