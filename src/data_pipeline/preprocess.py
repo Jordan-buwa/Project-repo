@@ -212,12 +212,12 @@ class DataPreprocessor:
         """Save processed data snapshot to PostgreSQL"""
         self.logger.info("Saving processed data snapshot to PostgreSQL...")
         try:
-            DB_USER = os.getenv("POSTGRES_USER", "jawpostgresdb")
+            DB_USER = os.getenv("POSTGRES_DB_USER", "jawpostgresdb")
             DB_PASS = os.getenv("POSTGRES_PASSWORD")
             DB_HOST = os.getenv(
                 "POSTGRES_HOST", "jaw-postgresdb.postgres.database.azure.com")
             DB_PORT = os.getenv("POSTGRES_PORT", "5432")
-            DB_NAME = os.getenv("POSTGRES_DB", "postgres")
+            DB_NAME = os.getenv("POSTGRES_DB_NAME", "postgres")
 
             conn_str = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
             engine = create_engine(conn_str)

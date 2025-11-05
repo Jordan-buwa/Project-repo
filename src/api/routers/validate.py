@@ -18,7 +18,7 @@ from src.api.utils.validation_utils import (
 
 load_dotenv()
 
-router = APIRouter(prefix="/data_validation", tags=["Data Validation"])
+router = APIRouter(prefix="/data_validation")
 
 # Configuration - will be reloaded for each request
 def get_config():
