@@ -144,9 +144,9 @@ class CustomerData(BaseModel):
         "actvsubs", "phones", "models", "eqpdays", "refer", "setprc"
     )
 
-    def non_negative(cls, v, field):
+    def non_negative(cls, v):
         if v is not None and v < 0:
-            raise ValueError(f"{field.name} must be >= 0")
+            raise ValueError(f"{v} must be >= 0")
         return v
 
     # Age constraints
@@ -182,9 +182,9 @@ class CustomerData(BaseModel):
     ]
 
     @field_validator(*_binary_fields)
-    def is_binary(cls, v, field):
-        if v is not None and v not in (0, 1):
-            raise ValueError(f"{field.name} must be 0 or 1")
+    def is_binary(cls, v):
+        if v is not None and v not in ("0", "1"):
+            raise ValueError(f"{v} must be 0 or 1")
         return v
 
     # 5. Mutually exclusive: newcelly and newcelln
