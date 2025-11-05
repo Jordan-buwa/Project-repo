@@ -91,71 +91,92 @@ combined_features:
   - "engagement_index"     # (outcalls + incalls) / (months + 1)
   - "model_change_rate"    # models / (months + 1)
   - "overage_ratio"        # overage / (revenue + 1)
+  - "call_activity_score"      # mou + mourec + 0.5*(outcalls + incalls + peakvce + opeakvce)
+  - "call_quality_issues"      # dropvce + blckvce + unansvce + dropblk
+  - "cust_engagement_score"    # custcare + retcalls + 2*retaccpt
+  - "overuse_behavior"         # overage + 0.5*(directas + recchrge)
+  - "device_tenure_index"      # 0.5*models + eqpdays/100 + refurb
+  - "demographic_index"        # ((age1 + age2)/2) + children*2 + income/10000
+  - "socio_tier"               # credita + 2*creditaa + prizmub + 0.5*prizmtwn
+  - "occupation_class"         # occprof + occcler + occcrft + occret + occself
+  - "household_lifestyle_score" # ownrent + marryyes + pcown + creditcd + travel + truck + rv
+  - "churn_change_score"       # changem + changer + newcelly + newcelln - 0.5*refer
 
 schema:
-  revenue:          { dtype: "float", allow_null: false }
-  mou:              { dtype: "float",  allow_null: false }
-  recchrge:         { dtype: "float",  allow_null: false }
-  directas:         { dtype: "float",  allow_null: true }
-  roam:             { dtype: "float", allow_null: true }
-  changem:          { dtype: "float",  allow_null: true }
-  changer:          { dtype: "float",  allow_null: true }
-  dropvce:          { dtype: "float",  allow_null: true }
-  blckvce:          { dtype: "float",  allow_null: true }
-  unansvce:         { dtype: "float",  allow_null: true }
-  custcare:         { dtype: "float",  allow_null: true }
-  threeway:         { dtype: "float",  allow_null: true }
-  mourec:           { dtype: "float",  allow_null: true }
-  peakvce:          { dtype: "float",  allow_null: true }
-  opeakvce:         { dtype: "float",  allow_null: true }
-  dropblk:          { dtype: "float",  allow_null: true }
-  callfwdv:         { dtype: "float",  allow_null: true }
-  callwait:         { dtype: "float",  allow_null: true }
-  months:           { dtype: "float",  allow_null: false }
-  uniqsubs:         { dtype: "float",  allow_null: false }
-  actvsubs:         { dtype: "float",  allow_null: false }
-  phones:           { dtype: "float",  allow_null: false }
-  eqpdays:          { dtype: "float", allow_null: true }
-  age1:             { dtype: "float",  allow_null: true }
-  age2:             { dtype: "float",  allow_null: true }
-  refer:            { dtype: "float",  allow_null: true }
-  income:           { dtype: "float",  allow_null: true }
-  setprc:           { dtype: "float",  allow_null: true }
-  engagement_index: { dtype: "float", allow_null: true }
-  model_change_rate: { dtype: "float", allow_null: true }
-  overage_ratio:    { dtype: "float", allow_null: true }
-  children:         { dtype: "int", allow_null: true }
-  credita:          { dtype: "int", allow_null: true }
-  creditaa:         { dtype: "int", allow_null: true }
-  prizmrur:         { dtype: "int", allow_null: true }
-  prizmub:          { dtype: "int", allow_null: true }
-  prizmtwn:         { dtype: "int", allow_null: true }
-  refurb:           { dtype: "int", allow_null: true }
-  webcap:           { dtype: "int", allow_null: true }
-  truck:            { dtype: "int", allow_null: true }
-  rv:               { dtype: "int", allow_null: true }
-  occprof:          { dtype: "int", allow_null: true }
-  occcler:          { dtype: "int", allow_null: true }
-  occcrft:          { dtype: "int", allow_null: true }
-  occstud:          { dtype: "int", allow_null: true }
-  occhmkr:          { dtype: "int", allow_null: true }
-  occret:           { dtype: "int", allow_null: true }
-  occself:          { dtype: "int", allow_null: true }
-  ownrent:          { dtype: "int", allow_null: true }
-  marryun:          { dtype: "int", allow_null: true }
-  marryyes:         { dtype: "int", allow_null: true }
-  mailord:          { dtype: "int", allow_null: true }
-  mailres:          { dtype: "int", allow_null: true }
-  mailflag:         { dtype: "int", allow_null: true }
-  travel:           { dtype: "int", allow_null: true }
-  pcown:            { dtype: "int", allow_null: true }
-  creditcd:         { dtype: "int", allow_null: true }
-  newcelly:         { dtype: "int", allow_null: true }
-  newcelln:         { dtype: "int", allow_null: true }
-  incmiss:          { dtype: "int", allow_null: true }
-  mcycle:           { dtype: "int", allow_null: true }
-  setprcm:          { dtype: "int", allow_null: true }
-  retcall:          { dtype: "int", allow_null: true }
-  retcalls:         { dtype: "int", allow_null: true }
-  retaccpt:         { dtype: "int", allow_null: true }
-  churn:            { dtype: "int", allowed_values: [0, 1], allow_null: false }
+  revenue:               { dtype: "float", allow_null: false }
+  mou:                   { dtype: "float", allow_null: false }
+  recchrge:              { dtype: "float", allow_null: false }
+  directas:              { dtype: "float", allow_null: true }
+  roam:                  { dtype: "float", allow_null: true }
+  changem:               { dtype: "float", allow_null: true }
+  changer:               { dtype: "float", allow_null: true }
+  dropvce:               { dtype: "float", allow_null: true }
+  blckvce:               { dtype: "float", allow_null: true }
+  unansvce:              { dtype: "float", allow_null: true }
+  custcare:              { dtype: "float", allow_null: true }
+  threeway:              { dtype: "float", allow_null: true }
+  mourec:                { dtype: "float", allow_null: true }
+  peakvce:               { dtype: "float", allow_null: true }
+  opeakvce:              { dtype: "float", allow_null: true }
+  dropblk:               { dtype: "float", allow_null: true }
+  callfwdv:              { dtype: "float", allow_null: true }
+  callwait:              { dtype: "float", allow_null: true }
+  months:                { dtype: "float", allow_null: false }
+  uniqsubs:              { dtype: "float", allow_null: false }
+  actvsubs:              { dtype: "float", allow_null: false }
+  phones:                { dtype: "float", allow_null: false }
+  models:                { dtype: "float", allow_null: true }
+  eqpdays:               { dtype: "float", allow_null: true }
+  age1:                  { dtype: "float", allow_null: true }
+  age2:                  { dtype: "float", allow_null: true }
+  refer:                 { dtype: "float", allow_null: true }
+  income:                { dtype: "float", allow_null: true }
+  setprc:                { dtype: "float", allow_null: true }
+  engagement_index:      { dtype: "float", allow_null: true }
+  model_change_rate:     { dtype: "float", allow_null: true }
+  overage_ratio:         { dtype: "float", allow_null: true }
+  call_activity_score:   { dtype: "float", allow_null: true }
+  call_quality_issues:   { dtype: "float", allow_null: true }
+  cust_engagement_score: { dtype: "float", allow_null: true }
+  overuse_behavior:      { dtype: "float", allow_null: true }
+  device_tenure_index:   { dtype: "float", allow_null: true }
+  demographic_index:     { dtype: "float", allow_null: true }
+  socio_tier:            { dtype: "float", allow_null: true }
+  occupation_class:      { dtype: "float", allow_null: true }
+  household_lifestyle_score: { dtype: "float", allow_null: true }
+  churn_change_score:    { dtype: "float", allow_null: true }
+  children:              { dtype: "int", allow_null: true }
+  credita:               { dtype: "int", allow_null: true }
+  creditaa:              { dtype: "int", allow_null: true }
+  prizmrur:              { dtype: "int", allow_null: true }
+  prizmub:               { dtype: "int", allow_null: true }
+  prizmtwn:              { dtype: "int", allow_null: true }
+  refurb:                { dtype: "int", allow_null: true }
+  webcap:                { dtype: "int", allow_null: true }
+  truck:                 { dtype: "int", allow_null: true }
+  rv:                    { dtype: "int", allow_null: true }
+  occprof:               { dtype: "int", allow_null: true }
+  occcler:               { dtype: "int", allow_null: true }
+  occcrft:               { dtype: "int", allow_null: true }
+  occstud:               { dtype: "int", allow_null: true }
+  occhmkr:               { dtype: "int", allow_null: true }
+  occret:                { dtype: "int", allow_null: true }
+  occself:               { dtype: "int", allow_null: true }
+  ownrent:               { dtype: "int", allow_null: true }
+  marryun:               { dtype: "int", allow_null: true }
+  marryyes:              { dtype: "int", allow_null: true }
+  mailord:               { dtype: "int", allow_null: true }
+  mailres:               { dtype: "int", allow_null: true }
+  mailflag:              { dtype: "int", allow_null: true }
+  travel:                { dtype: "int", allow_null: true }
+  pcown:                 { dtype: "int", allow_null: true }
+  creditcd:              { dtype: "int", allow_null: true }
+  newcelly:              { dtype: "int", allow_null: true }
+  newcelln:              { dtype: "int", allow_null: true }
+  incmiss:               { dtype: "int", allow_null: true }
+  mcycle:                { dtype: "int", allow_null: true }
+  setprcm:               { dtype: "int", allow_null: true }
+  retcall:               { dtype: "int", allow_null: true }
+  retcalls:              { dtype: "int", allow_null: true }
+  retaccpt:              { dtype: "int", allow_null: true }
+  churn:                 { dtype: "int", allowed_values: [0, 1], allow_null: false }
