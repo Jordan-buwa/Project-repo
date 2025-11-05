@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 router = APIRouter()
-app = FastAPI()
 
 class ModelRegistry:
     def __init__(self):
@@ -80,7 +79,7 @@ class ModelRegistry:
 model_registry = ModelRegistry()
 
 
-@app.get("/models")
+@router.get("/models")
 def list_all_models():
     """
     List all available models from MLflow and fallback local directory.

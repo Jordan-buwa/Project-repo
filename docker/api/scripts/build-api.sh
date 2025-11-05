@@ -24,7 +24,7 @@ if [ $? -eq 0 ]; then
     docker images | grep churn-api-jaw
     echo ""
     echo "Next steps:"
-    echo "  ./docker/scripts/start-api.sh  # Start the API"
+    echo "  ./docker/api/scripts/start-api.sh  # Start the API"
 else
     echo "API image build failed!"
     exit 1

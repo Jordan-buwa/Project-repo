@@ -86,7 +86,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Include routers
 app.include_router(predict.router, tags=["predictions"])
 app.include_router(train.router, tags=["training"])
-app.include_router(validate.router, tags=["validation"])
+app.include_router(validate.router, tags=["Data Validation"])
 app.include_router(metrics.router, tags=["metrics"])
 
 @app.get("/")

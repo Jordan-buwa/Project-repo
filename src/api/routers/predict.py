@@ -3,7 +3,6 @@ from psycopg2.extras import RealDictCursor
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from src.data_pipeline.preprocess import setup_logger
 from src.api.utils.customer_data import CustomerData
 from src.api.utils.database import get_db_connection
 from src.data_pipeline.preprocess import ProductionPreprocessor
@@ -11,9 +10,18 @@ from typing import Dict, Any
 import os
 import joblib
 import json
+import logging
 
-router = APIRouter(prefix="/predict", tags=["prediction"])
-logger = setup_logger("predict_router")
+router = APIRouter(prefix="/predict")
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 def get_latest_model(model_type: str):
     model_ext = ".pth" if model_type == "neural-net" else ".joblib"

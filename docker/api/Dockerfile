@@ -41,13 +41,17 @@ EXPOSE 8000
 
 # Health check (fixed - uses wget instead of curl)
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=10)" || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Set environment variables
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/src:/app
 ENV MODEL_DIR=/app/models
 ENV DATA_DIR=/app/data
 ENV LOG_LEVEL=INFO
+ENV POSTGRES_HOST=localhost
+ENV POSTGRES_PORT=5432
+ENV POSTGRES_DB_NAME=churn_db
+ENV MLFLOW_TRACKING_URI=file:///app/mlruns
 
 # Run the API
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
