@@ -11,6 +11,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from api.ml_models import load_all_models, clear_models, get_all_models_info
 from api.routers import predict, train, validate, metrics
+from api.utils.error_handlers import api_exception_handler, validation_exception_handler
 
 
 # Configure logging
@@ -71,7 +72,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# Exception handler
+# Exception handlers
+app.add_exception_handler(Exception, api_exception_handler)
+
+# Legacy global exception handler (keep for backward compatibility)
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Global exception handler caught: {str(exc)}", exc_info=True)
