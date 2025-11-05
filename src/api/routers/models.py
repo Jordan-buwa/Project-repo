@@ -1,94 +1,119 @@
+# src/api/routers/model_versions.py
 import os
-from fastapi import APIRouter, HTTPException, FastAPI
-from mlflow.tracking import MlflowClient
+import time
+import json
+from fastapi import APIRouter, HTTPException
 from dotenv import load_dotenv
+from mlflow.tracking import MlflowClient
+from src.api.utils.cache_utils import load_cache, save_cache
 
-# Loading environment variables
 load_dotenv()
+router = APIRouter(prefix="/models", tags=["Model Management"])  
 
-router = APIRouter()
+# Configuration
+MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI")
+REGISTERED_MODEL_NAME = os.getenv("REGISTERED_MODEL_NAME", "my_model")
+CACHE_FILE = os.getenv("MODEL_VERSIONS_CACHE_FILE", "src/api/cache/model_versions.json")
+CACHE_TTL = int(os.getenv("CACHE_TTL", 120))
+MODEL_DIR = os.getenv("MODEL_DIR", "models/")
 
-class ModelRegistry:
-    def __init__(self):
-        # Read from environment variable or fallback to local directory
-        self.model_dir = os.getenv("MODEL_DIR", "models/")
-        self.mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", None)
+# In-memory cache
+_cache = {"data": None, "last_update": 0}
 
-        # Initializing MLflow client if URI provided
-        self.client = MlflowClient(self.mlflow_tracking_uri) if self.mlflow_tracking_uri else None
+# Initializing MLflow client
+mlflow_client = None
+if MLFLOW_URI:
+    try:
+        mlflow_client = MlflowClient(tracking_uri=MLFLOW_URI)
+    except Exception:
+        mlflow_client = None
 
-        # Defining fallback model locations (in local storage)
-        self.local_models = {
-            "random_forest": os.path.join(self.model_dir, "random_forest"),
-            "xgboost": os.path.join(self.model_dir, "xgboost"),
-            "neural_network": os.path.join(self.model_dir, "neural_network"),
-        }
-
-    def list_local_models(self):
-        """List available local models from models directory."""
-        available = []
-        for name, path in self.local_models.items():
-            if os.path.exists(path):
-                available.append({
-                    "name": name,
-                    "path": path,
-                    "source": "local"
-                })
-        return available
-
-    def list_mlflow_models(self):
-        """List registered models from MLflow Tracking server."""
-        if not self.client:
-            return []
-
-        try:
-            models = self.client.list_registered_models()
-            model_list = []
-            for model in models:
-                for version in model.latest_versions:
-                    model_list.append({
-                        "name": model.name,
-                        "version": version.version,
-                        "stage": version.current_stage,
-                        "source": version.source,
-                        "run_id": version.run_id,
-                        "source_type": "mlflow"
-                    })
-            return model_list
-        except Exception as e:
-            # Log the error but don't raise exception - allow fallback to local models
-            print(f"Warning: Failed to fetch models from MLflow: {str(e)}")
-            return []  # Return empty list instead of raising exception
-
-    def get_all_models(self):
-        """Combine both MLflow and local fallback models."""
-        all_models = []
-        
-        # Try to get MLflow models (will return empty list if fails)
-        mlflow_models = self.list_mlflow_models()
-        all_models.extend(mlflow_models)
-        
-        # Always include local models as fallback
-        local_models = self.list_local_models()
-        all_models.extend(local_models)
-        
-        return all_models
+# Helper functions
+def fetch_models_from_mlflow():
+    """Fetching model versions from MLflow tracking server."""
+    if not mlflow_client:
+        raise HTTPException(status_code=500, detail="MLflow tracking URI not configured or unreachable")
+    try:
+        versions = mlflow_client.search_model_versions(f"name='{REGISTERED_MODEL_NAME}'")
+        result = []
+        for v in versions:
+            result.append({
+                "model_name": REGISTERED_MODEL_NAME,
+                "version": v.version,
+                "stage": v.current_stage,
+                "run_id": v.run_id,
+                "source": v.source,
+                "creation_timestamp": v.creation_timestamp,
+                "last_updated_timestamp": v.last_updated_timestamp
+            })
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching models from MLflow: {str(e)}")
 
 
-# Initialize registry
-model_registry = ModelRegistry()
+def fetch_models_from_local():
+    """Fetching models from local model directory."""
+    if not os.path.exists(MODEL_DIR):
+        return []
+
+    models = []
+    for model_name in os.listdir(MODEL_DIR):
+        model_path = os.path.join(MODEL_DIR, model_name)
+        if os.path.isdir(model_path):
+            metadata_file = os.path.join(model_path, "metadata.json")
+            info = {"model_name": model_name, "path": model_path, "source": "local"}
+            if os.path.exists(metadata_file):
+                try:
+                    with open(metadata_file, "r") as f:
+                        info.update(json.load(f))
+                except Exception:
+                    pass
+            models.append(info)
+    return models
 
 
-@router.get("/models")
-def list_all_models():
+def load_cached_models():
+    """Loading models from cache if valid, otherwise refresh cache."""
+    now = time.time()
+    if _cache["data"] and (now - _cache["last_update"]) < CACHE_TTL:
+        return _cache["data"]
+
+    if os.path.exists(CACHE_FILE):
+        cached = load_cache(CACHE_FILE, default=[])
+        _cache["data"] = cached
+        _cache["last_update"] = now
+        return cached
+
+    return refresh_model_cache()
+
+
+def refresh_model_cache():
+    """Refresh the model cache from MLflow (with local fallback)."""
+    try:
+        models = fetch_models_from_mlflow()
+    except HTTPException:
+        # Fallback to local models if MLflow fails
+        models = fetch_models_from_local()
+
+    save_cache(CACHE_FILE, models)
+    _cache["data"] = models
+    _cache["last_update"] = time.time()
+    return models
+
+
+@router.get("/")  
+def get_all_models():
     """
-    List all available models from MLflow and fallback local directory.
-    If MLflow is not configured, only local models are returned.
+    Unified endpoint: fetches model information from MLflow or local fallback.
+    Returns cached data if recent.
     """
     try:
-        models = model_registry.get_all_models()
-        if not models:
-            raise HTTPException(status_code=404, detail="No models found in MLflow or local directory.")
-        return {"models": models}
+        data = load_cached_models()
+        source = "mlflow" if mlflow_client else "local"
+        return {
+            "source": source,
+            "cached_at": _cache["last_update"],
+            "models": data
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error loading models: {str(e)}")
