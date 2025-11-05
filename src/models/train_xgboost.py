@@ -1,5 +1,9 @@
+import subprocess
+import warnings
+from src.data_pipeline.pipeline_data import fetch_preprocessed
 from collections import defaultdict
-import os, sys
+import os
+import sys
 import yaml
 import joblib
 import logging
@@ -14,9 +18,6 @@ from mlflow.models import infer_signature
 import json
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-from src.data_pipeline.pipeline_data import fetch_preprocessed
-import warnings
-import subprocess
 
 [warnings.filterwarnings("ignore", category=c)
  for c in (UserWarning, FutureWarning)]
@@ -231,8 +232,7 @@ class XGBoostTrainer:
                 signature=signature,
                 input_example=input_example)
 
-            # Remove the preprocessing artifacts saving block since we're not using self.dp
-            # Instead, log feature names and other relevant metadata
+            # Log feature names and other relevant metadata
             feature_metadata = {
                 "feature_names": X.columns.tolist(),
                 "n_features": len(X.columns),
