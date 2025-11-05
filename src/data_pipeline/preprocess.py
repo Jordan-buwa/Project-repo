@@ -209,12 +209,8 @@ class DataPreprocessor:
         # self.database_save()
 
     def database_save(self):
-<<<<<<< HEAD
-        # PostgreSQL snapshot (optional)
-=======
         """Save processed data snapshot to PostgreSQL"""
         self.logger.info("Saving processed data snapshot to PostgreSQL...")
->>>>>>> upstream/main
         try:
             DB_USER = os.getenv("POSTGRES_USER", "jawpostgresdb")
             DB_PASS = os.getenv("POSTGRES_PASSWORD")

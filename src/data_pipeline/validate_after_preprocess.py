@@ -6,27 +6,23 @@ from typing import Dict, Any
 import os
 from datetime import datetime
 
+
 def load_config(config_path: str) -> Dict[str, Any]:
     with open(config_path, "r") as f:
         return yaml.safe_load(f)
+log_path = "src/data_pipeline/logs/preprocessed/validation.log"
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    filename=log_path,
+    filemode="a",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 
-def setup_logger(log_path: str, log_level: str = "INFO"):
-    base, ext = os.path.splitext(log_path)
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    log_path_ts = f"{base}_{timestamp}{ext}"
-
-    os.makedirs(os.path.dirname(log_path_ts), exist_ok=True)
-    logging.basicConfig(
-        filename=log_path_ts,
-        filemode="a", 
-        level=getattr(logging, log_level.upper(), logging.INFO),
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )
-    return logging.getLogger(__name__)
 
 def validate_dataframe(df: pd.DataFrame, config_path: str) -> pd.DataFrame:
     config = load_config(config_path)
-    setup_logger(config["logging"]["log_path"], config["logging"]["log_level"])
+    #logging = setup_logger(log_path, config["logging"]["log_level"])
 
     drop_cols = config.get("drop_columns", [])
     target_col = config.get("target_column", None)
