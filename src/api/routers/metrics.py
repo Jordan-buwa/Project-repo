@@ -4,9 +4,7 @@ import joblib
 import json
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-router = APIRouter()
-app = FastAPI(title="Model Metrics API")
-
+router = APIRouter(prefix = "/metrics")
 
 def get_latest_model(model_type: str):
     model_ext = ".pth" if model_type == "neural-net" else ".joblib"
@@ -34,7 +32,7 @@ def load_model(model_path: str, model_type: str):
         return joblib.load(model_path)
 
 
-@app.post("/metrics/{model_type}")
+@router.post("/{model_type}")
 def get_metrics(model_type: str):
     # Load test data from JSON
     test_path = "test_input.json"

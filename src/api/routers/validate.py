@@ -1,5 +1,6 @@
 import os
 import json
+import mlflow
 import pandas as pd
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query, FastAPI
@@ -10,11 +11,9 @@ from src.api.utils.cache_utils import load_cache, save_cache
 
 load_dotenv()
 
-router = APIRouter(prefix="/api/data_validation", tags=["Data Validation"])
-app = FastAPI()
+router = APIRouter(prefix="/data_validation", tags=["Data Validation"])
 
 CACHE_FILE = os.getenv("DATA_VALIDATION_CACHE_FILE", "src/api/cache/data_validation_cache.json")
-ENABLE_CANARY = os.getenv("ENABLE_CANARY_VALIDATION", "True").lower() == "true"
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
 MLFLOW_EXPERIMENT = os.getenv("MLFLOW_EXPERIMENT_NAME", "default")
 
@@ -24,18 +23,29 @@ os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
 mlflow_client = MlflowClient(tracking_uri=MLFLOW_TRACKING_URI)
 
 def _log_validation_mlflow(result: dict):
-    import mlflow
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(MLFLOW_EXPERIMENT)
-    with mlflow.start_run(run_name=f"data_validation_{datetime.now().isoformat()}"):
-        for key, value in result.items():
-            if isinstance(value, (int, float, str)):
-                mlflow.log_param(key, value)
-        if result.get("issues"):
-            mlflow.log_param("issues", json.dumps(result["issues"]))
-        mlflow.set_tag("validation_stage", result.get("stage", "unknown"))
+    """Log validation results to MLflow"""
+    try:
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        mlflow.set_experiment(MLFLOW_EXPERIMENT)
+        with mlflow.start_run(run_name=f"data_validation_{datetime.now().isoformat()}"):
+            # Log parameters
+            mlflow.log_param("filename", result.get("filename", "unknown"))
+            mlflow.log_param("rows", result.get("rows", 0))
+            mlflow.log_param("columns", result.get("columns", 0))
+            mlflow.log_param("stage", result.get("stage", "unknown"))
+            
+            # Log issues if any
+            if result.get("issues"):
+                mlflow.log_param("issues_count", len(result["issues"]))
+                mlflow.log_param("issues", json.dumps(result["issues"][:10]))  # Limit to first 10
+            
+            mlflow.log_param("data_version", result.get("data_version", "unknown"))
+            mlflow.set_tag("validation_type", "data_validation")
+    except Exception as e:
+        # Don't break validation if MLflow fails
+        print(f"MLflow logging failed: {e}")
 
-@app.post("/validate")
+@router.post("/validate")
 async def validate_dataset(
     file: UploadFile = File(...),
     experiment: str = Query(None),
@@ -66,7 +76,7 @@ async def validate_dataset(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Validation failed: {str(e)}")
 
-@app.get("/history")
+@router.get("/history")
 def get_validation_history(
     stage: str = Query(None),
     sort_by: str = Query("timestamp"),

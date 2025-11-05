@@ -10,7 +10,7 @@ from datetime import datetime
 import io
 import json
 
-router = APIRouter()
+router = APIRouter(prefix="/ingest")
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     filename='src/api/utils/logs/ingest.log',
@@ -128,7 +128,7 @@ def dataframe_to_customer_data(df: pd.DataFrame, source: str) -> List[CustomerDa
     
     return customers
 
-@router.post("/ingest/single", response_model=IngestResponse)
+@router.post("/single", response_model=IngestResponse)
 async def ingest_single_record(data: CustomerData):
     """
     Ingest a single customer record via POST request.
@@ -167,7 +167,7 @@ async def ingest_single_record(data: CustomerData):
         logger.error(f"Error ingesting single record: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/ingest/batch", response_model=IngestResponse)
+@router.post("/batch", response_model=IngestResponse)
 async def ingest_batch_records(data: BatchCustomerData):
     """
     Ingest multiple customer records via POST request.
@@ -208,7 +208,7 @@ async def ingest_batch_records(data: BatchCustomerData):
         log_ingestion(batch_id, "api_batch", 0, 0, len(data.customers), error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/ingest/csv", response_model=IngestResponse)
+@router.post("/csv", response_model=IngestResponse)
 async def ingest_csv_file(
     file: UploadFile = File(..., description="CSV file to ingest"),
     source: str = Form(default="csv", description="Data source identifier")
@@ -265,7 +265,7 @@ async def ingest_csv_file(
                      file_name=file.filename, status="failed", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error processing CSV: {str(e)}")
 
-@router.post("/ingest/excel", response_model=IngestResponse)
+@router.post("/excel", response_model=IngestResponse)
 async def ingest_excel_file(
     file: UploadFile = File(..., description="Excel file to ingest"),
     source: str = Form(default="excel", description="Data source identifier")
@@ -321,7 +321,7 @@ async def ingest_excel_file(
                      file_name=file.filename, status="failed", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error processing Excel: {str(e)}")
 
-@router.get("/ingest/stats")
+@router.get("/stats")
 async def get_ingestion_stats(limit: int = 10):
     """
     Get ingestion statistics and recent logs.
@@ -379,7 +379,7 @@ async def get_ingestion_stats(limit: int = 10):
         logger.error(f"Error getting ingestion stats: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/ingest/batch/{batch_id}")
+@router.get("/batch/{batch_id}")
 async def get_batch_details(batch_id: str):
     """
     Get details of a specific ingestion batch.
@@ -424,7 +424,7 @@ async def get_batch_details(batch_id: str):
         logger.error(f"Error getting batch details: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/ingest/batch/{batch_id}")
+@router.delete("/batch/{batch_id}")
 async def delete_batch(batch_id: str):
     """
     Delete a specific ingestion batch.
@@ -463,7 +463,7 @@ async def delete_batch(batch_id: str):
         logger.error(f"Error deleting batch: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/ingest/export")
+@router.get("/export")
 async def export_data(
     format: str = "csv",
     source: Optional[str] = None,

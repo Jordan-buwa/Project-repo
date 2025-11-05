@@ -1,23 +1,42 @@
+# Core ML & Data Science
 dvc[azure]
-requests
 pandas
-sqlalchemy
-psycopg2-binary
-joblib
 numpy
-certifi
 scikit-learn
-great_expectations
-pyyaml
+scipy
+joblib
+
+# ML Frameworks
 xgboost
-imbalanced-learn
-mlflow
 torch
+torchvision
+imbalanced-learn
+
+# API & Web
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database
+psycopg2-binary
+sqlalchemy
+alembic
+
+# ML Tracking & Experimentation
+mlflow
 optuna
 optuna-integration[mlflow]
-uvicorn[standard]
+
+# Configuration & Validation
+pyyaml
+python-dotenv
 pydantic
+great-expectations
+
+# HTTP & Networking
+requests
 httpx
+
+# Development & Testing
 pytest
-fastapi
 pytest-asyncio

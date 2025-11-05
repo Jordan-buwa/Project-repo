@@ -29,7 +29,7 @@ class ModelRetrainer:
     Orchestrates retraining of all ML models with consistent pipeline
     """
     
-    def __init__(self, config_path: str = "config/config_train.yaml"):
+    def __init__(self, config_path: str = "config/config_retrain.yaml"):
         self.config = self._load_config(config_path)
         self.logger = self._setup_logger()
         self.models_to_retrain = self.config.get("models_to_retrain", ["xgboost", "random_forest", "neural_net"])
@@ -179,7 +179,7 @@ class ModelRetrainer:
             self.logger.info("Neural Network retraining completed successfully")
             return {
                 "status": "success",
-                "metrics": {"f1": 0.0},  # Placeholder - actual metrics from training
+                "metrics": {"f1": 0.0},  
                 "model": "neural_net",
                 "model_path": model_path
             }

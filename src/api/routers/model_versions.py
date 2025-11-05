@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from src.api.utils.cache_utils import load_cache, save_cache
 
 load_dotenv()
-router = APIRouter(prefix="/api/model_versions", tags=["Model Versions"])
+router = APIRouter(prefix="/model_versions", tags=["Model Versions"])
 
 MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI")
 CACHE_FILE = os.getenv("MODEL_VERSIONS_CACHE_FILE", "src/api/cache/model_versions.json")
