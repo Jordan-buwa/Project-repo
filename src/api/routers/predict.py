@@ -1,4 +1,4 @@
-from fastapi import HTTPException, APIRouter, Body
+from fastapi import HTTPException, APIRouter, Body, status
 from psycopg2.extras import RealDictCursor
 import pandas as pd
 import numpy as np
@@ -12,6 +12,13 @@ import joblib
 import json
 import logging
 
+from src.api.utils.config import APIConfig
+from src.api.utils.response_models import PredictionResponse, FeatureData
+from src.api.utils.error_handlers import (
+    ModelNotFoundError, DataNotFoundError, PreprocessingError,
+    handle_model_error, handle_data_error, raise_if_model_not_found
+)
+
 router = APIRouter(prefix="/predict")
 
 logger = logging.getLogger(__name__)
@@ -23,20 +30,17 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
+# Initialize configuration
+config = APIConfig()
+
 def get_latest_model(model_type: str):
-    model_ext = ".pth" if model_type == "neural-net" else ".joblib"
-    model_files = [
-        f for f in os.listdir("models")
-        if f.endswith(model_ext) and model_type.replace("-", "") in f.lower()
-    ]
-    if not model_files:
-        raise HTTPException(
-            status_code=404, detail=f"No trained {model_type} model found."
-        )
-    latest_model = max(
-        model_files, key=lambda f: os.path.getmtime(os.path.join("models", f))
-    )
-    return os.path.join("models", latest_model)
+    """Get the latest model path using centralized configuration."""
+    try:
+        model_path = config.get_model_path(model_type)
+        raise_if_model_not_found(model_path, model_type)
+        return model_path
+    except Exception as e:
+        handle_model_error(model_type, e)
 
 
 def load_model(model_path: str, model_type: str):
@@ -49,7 +53,7 @@ def load_model(model_path: str, model_type: str):
         return joblib.load(model_path)
 
 
-@router.post("/{model_type}")
+@router.post("/{model_type}", response_model=PredictionResponse)
 def predict_from_payload(
     model_type: str,
     payload: CustomerData = Body(..., example={
@@ -59,76 +63,31 @@ def predict_from_payload(
     """
     Accept raw customer data → run full preprocessing → predict churn.
     """
-    if model_type not in {"xgboost", "random-forest", "neural-net"}:
-        raise HTTPException(status_code=400,
-                            detail="model_type must be xgboost|random-forest|neural-net")
-
-    raw_data = payload.dict()
-    df = pd.DataFrame([raw_data])
-    artifact_path = "src/data_pipeline/preprocessing_artifacts.json"
-    if not os.path.exists(artifact_path):
-        raise HTTPException(status_code=500, detail="Preprocessing artifacts not found")
-    
-
-    processor = ProductionPreprocessor(artifacts_path = artifact_path)
-    df_processed = processor.preprocess(df)
-    feature_names = processor.get_feature_names()
-    features_dict = df_processed[feature_names].iloc[0].to_dict()
-    X = [list(features_dict.values())]
-
-    # 7. Load model & predict
-    model_path = get_latest_model(model_type)
-    model = load_model(model_path, model_type)
-
-    if model_type == "neural-net":
-        import torch
-        tensor = torch.tensor(X, dtype=torch.float32)
-        with torch.no_grad():
-            pred = model(tensor).cpu().numpy()[0]
-    else:
-        pred = model.predict(X)[0]
-
-    return {
-        "model_type": model_type,
-        "prediction": float(pred) if isinstance(pred, (int, float, np.generic)) else pred.tolist(),
-        "model_path": model_path,
-        "customer_id": raw_data.get("customer_id", "ad-hoc"),
-        "preprocessing_applied": True
-    }
-
-@router.get("/{model_type}/customer/{customer_id}")
-def predict_from_db_customer(
-    model_type: str,
-    customer_id: str,
-):
-
-    with get_db_connection() as conn:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute(
-            "SELECT features FROM customer_data WHERE customer_id = %s",
-            (customer_id,)
+    if model_type not in config.get_allowed_model_types():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"model_type must be one of: {config.get_allowed_model_types()}"
         )
-        row = cur.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Customer not found")
-        
-        # Handle both JSON string and already parsed JSON
-        features_dict = row["features"]
-        if isinstance(features_dict, str):
-            try:
-                features_dict = json.loads(features_dict)
-            except json.JSONDecodeError:
-                raise HTTPException(status_code=500, detail="Invalid features format")
-        
 
-        # Convert to 2D list for model
+    try:
+        raw_data = payload.dict()
+        df = pd.DataFrame([raw_data])
+        
+        # Use centralized artifact path
+        artifact_path = config.preprocessing_artifacts_path
+        if not os.path.exists(artifact_path):
+            raise PreprocessingError(f"Preprocessing artifacts not found at {artifact_path}")
+        
+        processor = ProductionPreprocessor(artifacts_path=artifact_path)
+        df_processed = processor.preprocess(df)
+        feature_names = processor.get_feature_names()
+        features_dict = df_processed[feature_names].iloc[0].to_dict()
         X = [list(features_dict.values())]
 
-        # Load model
+        # Load model & predict
         model_path = get_latest_model(model_type)
         model = load_model(model_path, model_type)
 
-        # Predict
         if model_type == "neural-net":
             import torch
             tensor = torch.tensor(X, dtype=torch.float32)
@@ -137,58 +96,158 @@ def predict_from_db_customer(
         else:
             pred = model.predict(X)[0]
 
-        return {
+        prediction_data = {
             "model_type": model_type,
-            "prediction": float(pred),
+            "prediction": float(pred) if isinstance(pred, (int, float, np.generic)) else pred.tolist(),
             "model_path": model_path,
-            "customer_id": customer_id,
-            "feature_count": len(features_dict)
-}
-@router.get("/{model_type}/batch/{batch_id}")
+            "customer_id": raw_data.get("customer_id", "ad-hoc"),
+            "preprocessing_applied": True
+        }
+
+        return PredictionResponse(
+            message="Prediction successful",
+            data=prediction_data
+        )
+        
+    except Exception as e:
+        logger.error(f"Prediction failed for model {model_type}: {str(e)}")
+        if "preprocessing" in str(e).lower():
+            raise PreprocessingError(f"Failed to preprocess data: {str(e)}")
+        else:
+            handle_model_error(model_type, e)
+
+@router.get("/{model_type}/customer/{customer_id}", response_model=PredictionResponse)
+def predict_from_db_customer(
+    model_type: str,
+    customer_id: str,
+):
+    """Predict churn for a specific customer from database."""
+    if model_type not in config.get_allowed_model_types():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"model_type must be one of: {config.get_allowed_model_types()}"
+        )
+
+    try:
+        with get_db_connection() as conn:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(
+                "SELECT features FROM customer_data WHERE customer_id = %s",
+                (customer_id,)
+            )
+            row = cur.fetchone()
+            if not row:
+                raise DataNotFoundError(f"customer_id: {customer_id}")
+            
+            # Handle both JSON string and already parsed JSON
+            features_dict = row["features"]
+            if isinstance(features_dict, str):
+                try:
+                    features_dict = json.loads(features_dict)
+                except json.JSONDecodeError:
+                    raise PreprocessingError(f"Invalid features format for customer {customer_id}")
+            
+            # Convert to 2D list for model
+            X = [list(features_dict.values())]
+
+            # Load model
+            model_path = get_latest_model(model_type)
+            model = load_model(model_path, model_type)
+
+            # Predict
+            if model_type == "neural-net":
+                import torch
+                tensor = torch.tensor(X, dtype=torch.float32)
+                with torch.no_grad():
+                    pred = model(tensor).cpu().numpy()[0]
+            else:
+                pred = model.predict(X)[0]
+
+            prediction_data = {
+                "model_type": model_type,
+                "prediction": float(pred),
+                "model_path": model_path,
+                "customer_id": customer_id,
+                "feature_count": len(features_dict),
+                "preprocessing_applied": False  # Data already preprocessed
+            }
+
+            return PredictionResponse(
+                message=f"Prediction successful for customer {customer_id}",
+                data=prediction_data
+            )
+            
+    except Exception as e:
+        logger.error(f"Prediction failed for customer {customer_id}: {str(e)}")
+        if "not found" in str(e).lower():
+            handle_data_error(f"customer_id: {customer_id}", e)
+        else:
+            handle_model_error(model_type, e)
+@router.get("/{model_type}/batch/{batch_id}", response_model=PredictionResponse)
 def predict_from_db_batch(
     model_type: str,
     batch_id: str,
     limit: int = 100,
 ):
     """Return predictions for the *first N* records of a batch."""
-    with get_db_connection() as conn:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute(
-            """SELECT customer_id, features
-               FROM customer_data
-               WHERE batch_id = %s
-               ORDER BY created_at
-               LIMIT %s""",
-            (batch_id, limit)
+    if model_type not in config.get_allowed_model_types():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"model_type must be one of: {config.get_allowed_model_types()}"
         )
-        rows = cur.fetchall()
-        if not rows:
-            raise HTTPException(status_code=404,
-                                detail="Batch empty or not found")
 
-    results = []
-    model_path = get_latest_model(model_type)
-    model = load_model(model_path, model_type)
+    try:
+        with get_db_connection() as conn:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(
+                """SELECT customer_id, features
+                   FROM customer_data
+                   WHERE batch_id = %s
+                   ORDER BY created_at
+                   LIMIT %s""",
+                (batch_id, limit)
+            )
+            rows = cur.fetchall()
+            if not rows:
+                raise DataNotFoundError(f"batch_id: {batch_id}")
 
-    for r in rows:
-        X = [list(r["features"].values())]
-        if model_type == "neural-net":
-            import torch
-            tensor = torch.tensor(X, dtype=torch.float32)
-            with torch.no_grad():
-                pred = model(tensor).cpu().numpy()[0]
+        results = []
+        model_path = get_latest_model(model_type)
+        model = load_model(model_path, model_type)
+
+        for r in rows:
+            X = [list(r["features"].values())]
+            if model_type == "neural-net":
+                import torch
+                tensor = torch.tensor(X, dtype=torch.float32)
+                with torch.no_grad():
+                    pred = model(tensor).cpu().numpy()[0]
+            else:
+                pred = model.predict(X)[0]
+
+            results.append({
+                "customer_id": r["customer_id"],
+                "prediction": pred.tolist() if isinstance(pred, (list, tuple)) else float(pred),
+            })
+
+        prediction_data = {
+            "model_type": model_type,
+            "batch_id": batch_id,
+            "predictions": results,
+            "model_path": model_path,
+            "prediction_count": len(results),
+            "preprocessing_applied": False  # Data already preprocessed
+        }
+
+        return PredictionResponse(
+            message=f"Batch prediction successful for {len(results)} customers",
+            data=prediction_data
+        )
+        
+    except Exception as e:
+        logger.error(f"Batch prediction failed for batch {batch_id}: {str(e)}")
+        if "not found" in str(e).lower():
+            handle_data_error(f"batch_id: {batch_id}", e)
         else:
-            pred = model.predict(X)[0]
-
-        results.append({
-            "customer_id": r["customer_id"],
-            "prediction": pred.tolist() if isinstance(pred, (list, tuple)) else float(pred),
-        })
-
-    return {
-        "model_type": model_type,
-        "batch_id": batch_id,
-        "predictions": results,
-        "model_path": model_path,
-    }
+            handle_model_error(model_type, e)
 

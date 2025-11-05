@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, status
 from pydantic import BaseModel
 import subprocess
 from dotenv import load_dotenv
@@ -9,6 +9,11 @@ import logging
 from datetime import datetime
 from typing import Dict, Optional
 from pathlib import Path
+
+from src.api.utils.config import APIConfig
+from src.api.utils.response_models import TrainingResponse, JobStatusResponse
+from src.api.utils.error_handlers import TrainingError, handle_training_error
+
 load_dotenv()
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent 
@@ -19,7 +24,12 @@ os.environ["PYTHONPATH"] = str(REPO_ROOT)
 
 router = APIRouter(prefix="/train")
 logger = logging.getLogger(__name__)
-log_path = "src/api/logs/"
+
+# Initialize configuration
+config = APIConfig()
+
+# Setup logging with centralized config
+log_path = config.logs_dir
 os.makedirs(log_path, exist_ok=True)
 log_file = os.path.join(log_path, 'training_jobs.log')
 logging.basicConfig(
@@ -36,34 +46,18 @@ class TrainingRequest(BaseModel):
     use_cv: bool = True
     hyperparameters: Optional[Dict] = None
 
-class TrainingResponse(BaseModel):
-    job_id: str
-    status: str
-    message: str
-    model_type: str
-
-class JobStatusResponse(BaseModel):
-    job_id: str
-    status: str
-    model_type: str
-    started_at: str
-    completed_at: Optional[str] = None
-    model_path: Optional[str] = None
-    error: Optional[str] = None
-    logs: Optional[str] = None
-
 def validate_training_script(script_path: str) -> str:
     """Validate that the training script exists (resolve relative to repo root)."""
-    repo_root = Path(__file__).resolve().parent.parent.parent.parent  # project root
+    repo_root = config.repo_root
     path = Path(script_path)
     if not path.is_absolute():
         candidate = repo_root / path
     else:
         candidate = path
     if not candidate.exists():
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Training script not found: {candidate}"
+        raise TrainingError(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            message=f"Training script not found: {candidate}"
         )
     return str(candidate)
 
@@ -96,7 +90,7 @@ def run_training_script(script_path: str, job_id: str, model_type: str):
         logger.info(f"Starting training job {job_id} for {model_type}")
         
         # Ensure subprocess runs with repository root on PYTHONPATH so `import src` works
-        repo_root = os.getenv("REPO_ROOT")
+        repo_root = config.repo_root
         
         # If the script lives under src/, prefer running it as a module to preserve package imports
         rel_path = Path(script_path).relative_to(repo_root) if Path(script_path).is_absolute() else Path(script_path)
@@ -150,7 +144,7 @@ def run_training_script(script_path: str, job_id: str, model_type: str):
 
 def find_latest_model_file(model_type: str) -> Optional[str]:
     """Find the latest model file based on model type."""
-    models_dir = Path("models")
+    models_dir = Path(config.models_dir)
     if not models_dir.exists():
         return None
     
@@ -176,16 +170,18 @@ def find_latest_model_file(model_type: str) -> Optional[str]:
 
 def get_script_path(model_type: str) -> str:
     """Get the script path for the specified model type."""
+    allowed_types = config.get_allowed_model_types()
+    
     script_map = {
         "neural-net": "src/models/churn_nn.py",
         "xgboost": "src/models/train_xgboost.py", 
         "random-forest": "src/models/train_RandomForest.py"
     }
     
-    if model_type not in script_map:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Unsupported model type: {model_type}. Supported types: {list(script_map.keys())}"
+    if model_type not in allowed_types:
+        raise TrainingError(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            message=f"Unsupported model type: {model_type}. Supported types: {allowed_types}"
         )
     
     return script_map[model_type]
@@ -200,7 +196,7 @@ async def train_model(
     Start training for a specific model type.
     
     Args:
-        model_type: Type of model to train ("neural-net", "xgboost", "random-forest")
+        model_type: The type of model to train (neural-net, xgboost, random-forest)
         background_tasks: FastAPI background tasks
         request: Optional training configuration
     """
@@ -224,17 +220,20 @@ async def train_model(
         logger.info(f"Started training job {job_id} for {model_type}")
         
         return TrainingResponse(
-            job_id=job_id,
-            status="started",
+            status="success",
             message=f"Training initiated for {model_type}",
-            model_type=model_type
+            data={
+                "job_id": job_id,
+                "model_type": model_type,
+                "status": "started"
+            }
         )
         
-    except HTTPException:
+    except TrainingError:
         raise
     except Exception as e:
         logger.error(f"Error starting training job: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        handle_training_error(e)
 
 @router.post("/{job_id}", response_model=TrainingResponse)
 async def train_model_with_config(
@@ -326,7 +325,10 @@ async def get_job_status(job_id: str):
         job_id: The ID of the training job to check
     """
     if job_id not in training_jobs:
-        raise HTTPException(status_code=404, detail="Job ID not found")
+        raise TrainingError(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            message="Job ID not found"
+        )
     
     job_info = training_jobs[job_id]
     
@@ -340,7 +342,11 @@ async def get_job_status(job_id: str):
         elif any(training_jobs.get(sub_id, {}).get("status") == "running" for sub_id in sub_jobs):
             job_info["status"] = "running"
     
-    return JobStatusResponse(**job_info)
+    return JobStatusResponse(
+        status="success",
+        message="Job status retrieved successfully",
+        data=job_info
+    )
 
 @router.get("/train/jobs")
 async def list_jobs(limit: int = 10, status: Optional[str] = None):
@@ -374,14 +380,17 @@ async def cancel_job(job_id: str):
     you would need to implement process management.
     """
     if job_id not in training_jobs:
-        raise HTTPException(status_code=404, detail="Job ID not found")
+        raise TrainingError(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            message="Job ID not found"
+        )
     
     job = training_jobs[job_id]
     
     if job["status"] in ["completed", "failed"]:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Cannot cancel job with status: {job['status']}"
+        raise TrainingError(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            message=f"Cannot cancel job with status: {job['status']}"
         )
     
     # Update status to cancelled
@@ -391,12 +400,16 @@ async def cancel_job(job_id: str):
     
     logger.info(f"Cancelled training job {job_id}")
     
-    return {"message": f"Job {job_id} cancelled successfully", "job_id": job_id}
+    return {
+        "status": "success",
+        "message": f"Job {job_id} cancelled successfully", 
+        "data": {"job_id": job_id}
+    }
 
 @router.get("/train/models/available")
 async def get_available_models():
     """Get list of available trained models in the models directory."""
-    models_dir = Path("models")
+    models_dir = Path(config.models_dir)
     available_models = {}
     
     if models_dir.exists():

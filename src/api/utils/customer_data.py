@@ -120,6 +120,20 @@ class CustomerData(BaseModel):
     source: Optional[str] = Field(default="api", description="Data source: api, csv, excel, google_form")
     timestamp: Optional[str] = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
+    @field_validator(
+        "children", "credita", "creditaa", "prizmrur", "prizmub", "prizmtwn",
+        "refurb", "webcap", "truck", "rv", "occprof", "occcler", "occcrft",
+        "occstud", "occhmkr", "occret", "occself", "ownrent", "marryun",
+        "marryyes", "mailord", "mailres", "mailflag", "travel", "pcown",
+        "creditcd", "newcelly", "newcelln", "incmiss", "mcycle", "setprcm",
+        "retcall", "retcalls", "retaccpt", "churn", "churndep", "customer"
+    )
+    def convert_to_string(cls, v):
+        """Convert numeric values to strings for categorical fields"""
+        if v is not None:
+            return str(v)
+        return v
+    
     # Non-negative numerical fields
 
     @field_validator(
@@ -130,9 +144,9 @@ class CustomerData(BaseModel):
         "actvsubs", "phones", "models", "eqpdays", "refer", "setprc"
     )
 
-    def non_negative(cls, v, field):
+    def non_negative(cls, v):
         if v is not None and v < 0:
-            raise ValueError(f"{field.name} must be >= 0")
+            raise ValueError(f"{v} must be >= 0")
         return v
 
     # Age constraints
@@ -168,9 +182,9 @@ class CustomerData(BaseModel):
     ]
 
     @field_validator(*_binary_fields)
-    def is_binary(cls, v, field):
-        if v is not None and v not in (0, 1):
-            raise ValueError(f"{field.name} must be 0 or 1")
+    def is_binary(cls, v):
+        if v is not None and v not in ("0", "1"):
+            raise ValueError(f"{v} must be 0 or 1")
         return v
 
     # 5. Mutually exclusive: newcelly and newcelln
