@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import List
 from src.api.utils.customer_data import CustomerData
+import json
 import os
 import logging
 from dotenv import load_dotenv
@@ -72,6 +73,7 @@ def initialize_database():
         # Main customer data table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS customer_data (
+                 features JSONB,      
                 id SERIAL PRIMARY KEY,
                 customer_id VARCHAR(255),
                        
@@ -225,7 +227,9 @@ def save_customer_data(data: CustomerData, batch_id: str) -> bool:
             # Generate customer_id if not provided
             if not data.customer_id:
                 data.customer_id = f"CUST_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{id(data)}"
-            
+
+            # Convert to features JSON
+            features_dict = data.dict(exclude={'customer_id', 'source', 'timestamp', 'batch_id'})
             cursor.execute("""
                 INSERT INTO customer_data (
                     customer_id, unnamed_0, x, customer, traintest, churndep, revenue, mou, recchrge,
@@ -238,18 +242,19 @@ def save_customer_data(data: CustomerData, batch_id: str) -> bool:
                     occret, occself, ownrent, marryun, marryyes, mailord, mailres,
                     mailflag, travel, pcown, creditcd, newcelly, newcelln, incmiss,
                     mcycle, setprcm, retcall, retcalls, retaccpt,
-                    churn, source, timestamp, batch_id
+                    churn, source, timestamp, batch_id, features
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
                 ON CONFLICT (customer_id, timestamp) DO UPDATE SET
                     revenue = EXCLUDED.revenue,
                     mou = EXCLUDED.mou,
-                    churn = EXCLUDED.churn
+                    churn = EXCLUDED.churn,
+                    features = EXCLUDED.features
             """, (
                 data.customer_id, data.unnamed_0, data.x, data.customer, data.traintest, data.churndep,
                 data.revenue, data.mou, data.recchrge, data.directas,
@@ -266,7 +271,8 @@ def save_customer_data(data: CustomerData, batch_id: str) -> bool:
                 data.mailres, data.mailflag, data.travel, data.pcown, data.creditcd,
                 data.newcelly, data.newcelln, data.incmiss, data.mcycle, data.setprcm,
                 data.retcall, data.retcalls, data.retaccpt,
-                data.churn, data.source, data.timestamp, batch_id
+                data.churn, data.source, data.timestamp, batch_id,
+                json.dump(features_dict)
             ))
             
             cursor.close()

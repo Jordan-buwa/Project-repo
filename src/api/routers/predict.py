@@ -3,7 +3,7 @@ from psycopg2.extras import RealDictCursor
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from src.data_pipeline.preprocess import DataPreprocessor, setup_logger
+from src.data_pipeline.preprocess import setup_logger
 from src.api.utils.customer_data import CustomerData
 from src.api.utils.database import get_db_connection
 from src.data_pipeline.preprocess import ProductionPreprocessor
@@ -93,6 +93,7 @@ def predict_from_db_customer(
     model_type: str,
     customer_id: str,
 ):
+
     with get_db_connection() as conn:
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute(
@@ -101,12 +102,16 @@ def predict_from_db_customer(
         )
         row = cur.fetchone()
         if not row:
-            raise HTTPException(status_code=404,
-                                detail="Customer not found")
+            raise HTTPException(status_code=404, detail="Customer not found")
+        
+        # Handle both JSON string and already parsed JSON
         features_dict = row["features"]
         if isinstance(features_dict, str):
-            import json
-            features_dict = json.loads(features_dict)
+            try:
+                features_dict = json.loads(features_dict)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=500, detail="Invalid features format")
+        
 
         # Convert to 2D list for model
         X = [list(features_dict.values())]

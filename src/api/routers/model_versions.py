@@ -7,8 +7,7 @@ from mlflow.tracking import MlflowClient
 from src.api.utils.cache_utils import load_cache, save_cache
 
 load_dotenv()
-
-router = APIRouter(prefix="/api", tags=["Model Management"])
+router = APIRouter(prefix="/model_versions", tags=["Model Versions"])
 
 # Configuration
 MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI")
