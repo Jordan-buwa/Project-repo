@@ -157,12 +157,12 @@ class CustomerData(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def age_order(cls, values):
-        age1 = values.get("age1")
-        age2 = values.get("age2")
+    def age_order(cls, self):
+        age1 = self.age1
+        age2 = self.age2
         if age1 is not None and age2 is not None and age1 < age2:
             raise ValueError("age1 must be >= age2")
-        return values
+        return self
 
     # Income: 0–9 scale
     @field_validator("income")
@@ -189,35 +189,35 @@ class CustomerData(BaseModel):
 
     # 5. Mutually exclusive: newcelly and newcelln
     @model_validator(mode="after")
-    def newcell_exclusive(cls, values):
-        y = values.get("newcelly")
-        n = values.get("newcelln")
+    def newcell_exclusive(cls, self):
+        y = self.newcelly
+        n = self.newcelln
         if y == 1 and n == 1:
             raise ValueError("newcelly and newcelln cannot both be 1")
         if y is None and n is None:
             raise ValueError("One of newcelly or newcelln must be set")
-        return values
+        return self
 
     # Subscriber logic
     @model_validator(mode="after")
-    def subscriber_logic(cls, values):
-        uniq = values.get("uniqsubs")
-        actv = values.get("actvsubs")
+    def subscriber_logic(cls, self):
+        uniq = self.uniqsubs
+        actv = self.actvsubs
         if uniq is not None and actv is not None:
             if actv > uniq:
                 raise ValueError("actvsubs cannot exceed uniqsubs")
             if actv < 1:
                 raise ValueError("actvsubs must be at least 1")
-        return values
+        return self
 
     # Retention call logic
     @model_validator(mode="after")
-    def retention_logic(cls, values):
-        retcall = values.get("retcall")
-        retcalls = values.get("retcalls")
+    def retention_logic(cls, self):
+        retcall = self.retcall
+        retcalls = self.retcalls
         if retcall == 1 and (retcalls is None or retcalls < 1):
             raise ValueError("If retcall=1, retcalls must be >= 1")
-        return values
+        return self
 
     # churn must be 0 or 1 if provided
     @field_validator("churn")

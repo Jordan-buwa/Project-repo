@@ -6,20 +6,16 @@ import json
 import logging
 from datetime import datetime
 from sqlalchemy import create_engine
-import requests
 from dotenv import load_dotenv
 load_dotenv()
 
 # Utility Functions
 
 def setup_logger(log_path: str, log_level: str = "INFO"):
-    base, ext = os.path.splitext(log_path)
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    log_path_ts = f"{base}_{timestamp}{ext}"
-
-    os.makedirs(os.path.dirname(log_path_ts), exist_ok=True)
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
     logging.basicConfig(
-        filename=log_path_ts,
+        filename=log_path+f"ingest_{timestamp}.log",
         filemode="a", 
         level=getattr(logging, log_level.upper(), logging.INFO),
         format="%(asctime)s - %(levelname)s - %(message)s",
@@ -92,6 +88,7 @@ class DataIngestion:
 
     def _load_csv(self) -> pd.DataFrame:
         cfg = self.config["csv"]
+        backup_dir = self.config["storage"]["backup_dir"]
 
         # Check for training & testing paths
         train_path = cfg.get("train_path")
@@ -119,12 +116,13 @@ class DataIngestion:
                 )
 
                 # Combine or return as dict (you can decide)
-                combined_df = pd.concat(
+                df = pd.concat(
                     [df_train.assign(dataset="train"), df_test.assign(dataset="test")],
                     ignore_index=True
                 )
                 self.logger.info("Training and testing datasets concatenated successfully.")
-                return combined_df
+                df.to_csv(backup_dir + "ingested.csv", index=False, encoding='utf-8', sep=',', header=True)
+                return df
 
             except Exception as e:
                 self.logger.error(f"Error loading train/test CSVs: {e}")
@@ -140,6 +138,7 @@ class DataIngestion:
                 )
                 self.logger.info(f"Loaded {len(df)} records from {single_path}")
                 print(f"Loaded {len(df)} records from {single_path}")
+                df.to_csv(backup_dir + "ingested.csv", index=False, encoding='utf-8', sep=',', header=True)
                 return df
             except Exception as e:
                 self.logger.error(f"CSV ingestion failed for {single_path}: {e}")
@@ -149,21 +148,6 @@ class DataIngestion:
             msg = "No valid CSV path(s) found in config file. Expected 'path' or ('train_path' and 'test_path')."
             self.logger.error(msg)
             raise ValueError(msg)
-
-
-    """    def _load_database(self) -> pd.DataFrame:
-        cfg = self.config["database"]
-        conn = cfg["connection_string"]
-        query = cfg["query"]
-        self.logger.info(f"Querying database: {conn}")
-        try:
-            engine = create_engine(conn)
-            df = pd.read_sql_query(query, engine)
-            self.logger.info(f"Fetched {len(df)} records from database.")
-            return df
-        except Exception as e:
-            self.logger.error(f"Database ingestion failed: {e}")
-            raise"""
 
     def _load_database(self) -> pd.DataFrame:
         """Load data from a PostgreSQL database using SQLAlchemy."""
