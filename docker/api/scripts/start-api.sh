@@ -21,7 +21,7 @@ fi
 # Check if image exists, if not build it
 if [[ "$(docker images -q churn-api-jaw:latest 2> /dev/null)" == "" ]]; then
     echo "Image not found, building..."
-    ./docker/scripts/build-api.sh
+    ./docker/api/scripts/build-api.sh
 fi
 
 # Create necessary directories
@@ -52,6 +52,6 @@ for i in {1..30}; do
 done
 
 echo "API failed to start within 60 seconds"
-echo "Check logs: ./docker/scripts/logs-api.sh"
+echo "Check logs: ./docker/api/scripts/logs-api.sh"
 docker-compose -f docker-compose.api.yml logs churn-api-jaw
 exit 1
