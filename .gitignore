@@ -24,3 +24,7 @@ tests/integration/
 tests/
 test/
 *test*.py
+note.ipynb
+dvc.yaml
+tree.sh
+src/data_pipeline/preprocessing_artifacts.pkl

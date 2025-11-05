@@ -158,7 +158,7 @@ class NeuralNetworkTrainer():
                 mlflow.log_artifact("images/confusion_matrix.png")
                 # Predict probabilities and determine best threshold
                 self.logger.info(f"Shape of X_test: {X_test.shape}\nShape of model output: {self.model.predict_proba(X_test).shape}")
-                y_probs = self.model.predict_proba.view(1, -1)(X_test)[1, :]
+                y_probs = self.model.predict_proba(X_test).view(1, -1)[1, :].item()
                 best_threshold, best_f1 = self.get_prediction_threshold(y_test, y_probs)
                 y_pred = (y_probs >= best_threshold).astype(int)
 

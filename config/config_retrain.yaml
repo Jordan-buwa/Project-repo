@@ -1,0 +1,18 @@
+# Retraining Configuration
+models_to_retrain: ["xgboost", "random_forest", "neural_net"]
+performance_threshold: 0.7
+enable_mlflow: true
+save_models: true
+
+# Data Settings
+validation:
+  min_samples: 1000
+  max_null_percentage: 5.0
+  min_class_balance: 0.1
+
+# Scheduling (for future use)
+schedule:
+  enabled: false
+  frequency: "weekly"
+  day_of_week: "monday"
+  time: "02:00"
