@@ -24,32 +24,44 @@ By developing a holistic view of customer interactions, telecom companies can pr
 ## Project structure
 ```text
 ├── README.md
-├── artifacts
 ├── churn.html
 ├── config
+│   ├── config_api_data-val.yaml
 │   ├── config_ingest.yaml
 │   ├── config_process.yaml
+│   ├── config_retrain.yaml
 │   ├── config_train.yaml
 │   ├── config_train_nn.yaml
 │   ├── config_train_rf.yaml
+│   ├── config_train_xgb.yaml
 │   └── logging.conf
 ├── data
-│   ├── metadata
-│   ├── processed
-│   ├── raw
 │   └── snapshots.dvc
+├── docker
+│   ├── api
+│   │   ├── Dockerfile
+│   │   └── scripts
+│   ├── train
+│   │   ├── Dockerfile
+│   │   └── scripts
+│   └── training_pipeline
+│       └── Dockerfile
+├── docker-compose.api.yml
+├── documentations
+│   ├── api_overview.md
+│   ├── examples.md
+│   ├── metrics_api.md
+│   ├── predict_api.md
+│   └── train_api.md
 ├── dvc.lock
-├── dvc_refresh.sh
-├── git.sh
 ├── images
 │   ├── Churn_predicition_system_architecture.png
-│   └── churn.webp
-├── models
-├── push.py
+│   ├── churn.webp
+│   └── confusion_matrix.png
+├── notebooks
+│   └── preprocess_notebook.ipynb
 ├── requirements.txt
 ├── retrain.py
-├── run_output.log
-├── setup.py
 ├── src
 │   ├── __init__.py
 │   ├── api
@@ -57,12 +69,20 @@ By developing a holistic view of customer interactions, telecom companies can pr
 │   │   ├── main.py
 │   │   ├── ml_models.py
 │   │   ├── routers
+│   │   │   ├── ingest.py
 │   │   │   ├── metrics.py
+│   │   │   ├── models.py
 │   │   │   ├── predict.py
 │   │   │   ├── train.py
 │   │   │   └── validate.py
-│   │   └── templates
-│   ├── data
+│   │   └── utils
+│   │       ├── cache_utils.py
+│   │       ├── config.py
+│   │       ├── customer_data.py
+│   │       ├── database.py
+│   │       ├── error_handlers.py
+│   │       ├── response_models.py
+│   │       └── validation_utils.py
 │   ├── data_pipeline
 │   │   ├── ingest.py
 │   │   ├── pipeline_data.py
@@ -71,8 +91,6 @@ By developing a holistic view of customer interactions, telecom companies can pr
 │   ├── models
 │   │   ├── __init__.py
 │   │   ├── churn_nn.py
-│   │   ├── predict.py
-│   │   ├── train.py
 │   │   ├── train_NN
 │   │   │   └── neural_net.py
 │   │   ├── train_RandomForest.py
@@ -87,11 +105,10 @@ By developing a holistic view of customer interactions, telecom companies can pr
 │       ├── __init__.py
 │       ├── drift.py
 │       └── metrics.py
-├── tes.py
-├── test.py
 └── tests
     ├── integration
-    │   └── test_pipeline.py
+    │   ├── test_pipeline.py
+    │   └── test_training.py
     └── unit
         └── test_preprocess.py
 ```

@@ -1,8 +1,3 @@
-"""
-Standardized response models and error handling for API endpoints.
-Ensures consistent response formats across all routers.
-"""
-
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Optional, List, Union
 from enum import Enum

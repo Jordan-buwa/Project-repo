@@ -1,8 +1,3 @@
-"""
-Standardized error handling utilities for API endpoints.
-Provides consistent error responses across all routers.
-"""
-
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from typing import Any, Dict, Optional, List
