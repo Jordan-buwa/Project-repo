@@ -11,13 +11,13 @@ from typing import Dict, Optional
 from pathlib import Path
 load_dotenv()
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent  # adjust as needed
-sys.path.append(str(REPO_ROOT))  # make it importable
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent 
+sys.path.append(str(REPO_ROOT))  
 
 os.environ["REPO_ROOT"] = str(REPO_ROOT)
 os.environ["PYTHONPATH"] = str(REPO_ROOT)
 
-router = APIRouter()
+router = APIRouter(prefix="/train")
 logger = logging.getLogger(__name__)
 log_path = "src/api/logs/"
 os.makedirs(log_path, exist_ok=True)
@@ -236,7 +236,7 @@ async def train_model(
         logger.error(f"Error starting training job: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/train", response_model=TrainingResponse)
+@router.post("/{job_id}", response_model=TrainingResponse)
 async def train_model_with_config(
     request: TrainingRequest,
     background_tasks: BackgroundTasks

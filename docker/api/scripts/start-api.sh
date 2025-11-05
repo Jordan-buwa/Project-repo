@@ -17,6 +17,13 @@ if [ -f .env ]; then
     echo "Loaded environment variables from .env"
 fi
 
+
+# Check if image exists, if not build it
+if [[ "$(docker images -q churn-api-jaw:latest 2> /dev/null)" == "" ]]; then
+    echo "Image not found, building..."
+    ./docker/api/scripts/build-api.sh
+fi
+
 # Create necessary directories
 mkdir -p models artifacts data/processed data/raw logs mlruns
 
@@ -26,21 +33,6 @@ docker-compose -f docker-compose.api.yml up -d
 
 # Wait for services to be healthy
 echo "Waiting for services to be ready..."
-
-# Wait for PostgreSQL
-echo "Waiting for PostgreSQL..."
-for i in {1..30}; do
-    if docker exec churn-postgres pg_isready -U postgres > /dev/null 2>&1; then
-        echo "PostgreSQL is ready!"
-        break
-    fi
-    if [ $i -eq 30 ]; then
-        echo "PostgreSQL failed to start within 60 seconds"
-        docker-compose -f docker-compose.api.yml logs postgres
-        exit 1
-    fi
-    sleep 2
-done
 
 # Wait for API to be healthy
 echo "Waiting for API to be ready..."

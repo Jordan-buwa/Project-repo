@@ -25,6 +25,7 @@ DB_CONFIG = {
     'database': os.getenv('POSTGRES_DB_NAME', 'churn_db'),
     'user': os.getenv('POSTGRES_DB_USER', 'postgres'),
     'password': os.getenv('POSTGRES_PASSWORD', 'postgres'),
+    'sslmode': 'require'  # Azure PostgreSQL requires SSL
 }
 
 # Connection pool (min 2 connections, max 10)
