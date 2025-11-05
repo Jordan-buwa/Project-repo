@@ -21,3 +21,4 @@ httpx
 pytest
 fastapi
 pytest-asyncio
+requests-mock

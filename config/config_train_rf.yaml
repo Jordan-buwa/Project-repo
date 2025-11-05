@@ -1,51 +1,54 @@
 logging:
   log_path: "src/data_pipeline/logs/training/train_rf.log"
+  experiment_tracking: true
   log_level: "INFO"
 
 data:
   target_column: "churn"
-  # output_path: "data/processed/preprocessed.csv"
-
+  source: "postgres"  # postgres or local
+  local_path: "data/processed/processed_data.csv"
+  experiment_tracking: true
 
 model_selection:
   model_choice:
     - "random_forest"
+  enable: true
   primary_metric: "roc_auc"
   performance_threshold:
     accuracy: 0.7
     roc_auc: 0.75
+  mlflow_tracking_uri: "mlruns/"
 
 hyperparameters:
   random_forest:
-    n_estimators: [200, 250]
-    max_depth: [5, null]      
-    max_features: ["sqrt", "log2", null]
-    min_samples_split: [2, 5]        
-    min_samples_leaf: [1, 2]        
-
+    n_estimators: [50, 100]           
+    max_depth: [5, 10]               
+    max_features: ["sqrt"]            
+    min_samples_split: [2, 5]      
+    min_samples_leaf: [1, 2]          
 cv:
-  n_splits: 4 
+  n_splits: 3                         
   scoring: "roc_auc"
-  n_jobs: 2     
+  n_jobs: -1                          
   verbose: 1
-
 
 resampling:
   apply_smotetomek: true  
 
-experiment_name: "Customer Churn Model Training"
+experiment_name: "Random forest for Churn Model"
 
 mlflow:
   registered_model_name: "customer_churn_model"
 
 model:
   random_state: 42
-  test_size: 0.2          
+  test_size: 0.2 
+  validation_size: 0.1         
   max_depth: null           
-  n_estimators: 100          # number of trees            # None in Python → unlimited depth
+  n_estimators: 100          
   min_samples_split: 2
   min_samples_leaf: 1
-  max_features: "sqrt"       # allowed values: sqrt, log2, or None
+  max_features: "sqrt"       
   bootstrap: true
 
 output:
