@@ -1,17 +1,23 @@
 logging:
   log_path: "src/data_pipeline/logs/training/train_rf.log"
+  experiment_tracking: true
   log_level: "INFO"
 
 data:
   target_column: "churn"
+  source: "postgres"  # postgres or local
+  local_path: "data/processed/processed_data.csv"
+  experiment_tracking: true
 
 model_selection:
   model_choice:
     - "random_forest"
+  enable: true
   primary_metric: "roc_auc"
   performance_threshold:
     accuracy: 0.7
     roc_auc: 0.75
+  mlflow_tracking_uri: "mlruns/"
 
 hyperparameters:
   random_forest:
@@ -36,7 +42,8 @@ mlflow:
 
 model:
   random_state: 42
-  test_size: 0.2          
+  test_size: 0.2 
+  validation_size: 0.1         
   max_depth: null           
   n_estimators: 100          
   min_samples_split: 2

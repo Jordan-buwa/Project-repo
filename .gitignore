@@ -18,3 +18,9 @@ dvc_refresh.sh
 try.py
 .pytest_cache/
 /models
+tests/unit/
+tests/integration/
+!tests/__init__.py
+tests/
+test/
+*test*.py
