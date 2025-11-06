@@ -9,8 +9,6 @@ from sqlalchemy import create_engine
 from dotenv import load_dotenv
 load_dotenv()
 
-# Utility Functions
-
 def setup_logger(log_path: str, log_level: str = "INFO"):
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
