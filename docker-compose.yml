@@ -1,7 +1,7 @@
-version: '3.8'
+version: "3.9"
 
 services:
-  #  TRAINING SERVICE 
+  # TRAINING SERVICE
   train:
     build:
       context: .
@@ -17,20 +17,32 @@ services:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     depends_on:
       - mlflow
-    command: python src/models/train_xgb.py
+      - db
+    command: >
+      python -m src.models.utils.wait_for_services db 5432 http://mlflow:5000 &&
+      python src/models/train_xgb.py
 
-  #  MLFLOW SERVICE 
+  # MLFLOW SERVICE
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.12.1
+    build:
+      context: .
+      dockerfile: docker/mlflow/Dockerfile
     container_name: mlflow
-    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root /app/artifacts
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri postgresql+psycopg2://mlflow_user:mlflow_pass@db:5432/mlflow_db
+      --default-artifact-root /app/artifacts
     ports:
       - "8080:5000"
     volumes:
       - ./mlruns:/app/mlruns
       - ./artifacts:/app/artifacts
+    depends_on:
+      - db
 
-  #  API SERVICE 
+  # API SERVICE
   api:
     build:
       context: .
@@ -38,22 +50,40 @@ services:
     container_name: churn-api
     ports:
       - "8000:8000"
-    depends_on:
-      - train
+    env_file:
+      - .env
     environment:
       - PYTHONPATH=/app
       - MODEL_DIR=/app/models
       - DATA_DIR=/app/data
       - LOG_LEVEL=INFO
-      - POSTGRES_HOST=localhost
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB_NAME=churn_db
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
     volumes:
       - ./models:/app/models
       - ./data:/app/data
+    depends_on:
+      - mlflow
+      - db
+    command: >
+      python -m src.models.utils.wait_for_services db 5432 http://mlflow:5000 &&
+      uvicorn src.api.main:app --host 0.0.0.0 --port 8000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # DATABASE SERVICE
+  db:
+    image: postgres:15
+    container_name: mlflow-db
+    environment:
+      POSTGRES_USER: mlflow_user
+      POSTGRES_PASSWORD: mlflow_pass
+      POSTGRES_DB: mlflow_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - mlflow-db-data:/var/lib/postgresql/data
+
+volumes:
+  mlflow-db-data:
