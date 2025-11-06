@@ -19,9 +19,9 @@ project_root = Path(__file__).parent
 sys.path.append(str(project_root))
 
 from src.data_pipeline.pipeline_data import fetch_preprocessed
-from src.models.churn_nn import NeuralNetworkTrainer
-from src.models.train_xgboost import XGBoostTrainer, setup_logger as xgb_logger
-from src.models.train_RandomForest import evaluate_models as rf_evaluate
+from src.models.train_nn import NeuralNetworkTrainer
+from src.models.train_xgb import XGBoostTrainer, setup_logger as xgb_logger
+from src.models.train_rf import evaluate_models as rf_evaluate
 import torch
 
 class ModelRetrainer:
