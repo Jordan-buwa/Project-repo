@@ -11,7 +11,7 @@ from optuna.integration import MLflowCallback
 import logging
 from sklearn.impute import SimpleImputer
 import os
-from src.models.train_NN.neural_net import ChurnNN
+from src.models.network.neural_net import ChurnNN
 from src.models.utils.train_util import train_model
 from src.models.utils.eval_nn import evaluate_model
 

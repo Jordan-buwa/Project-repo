@@ -89,6 +89,7 @@ class DataIngestion:
     def _load_csv(self) -> pd.DataFrame:
         cfg = self.config["csv"]
         backup_dir = self.config["storage"]["backup_dir"]
+        os.makedirs(backup_dir, exist_ok=True)
 
         # Check for training & testing paths
         train_path = cfg.get("train_path")
