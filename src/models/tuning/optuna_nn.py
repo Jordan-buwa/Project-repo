@@ -8,13 +8,15 @@ from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.over_sampling import SMOTE
 import optuna
 from optuna.integration import MLflowCallback
+import mlflow
 import logging
 from sklearn.impute import SimpleImputer
 import os
 from src.models.network.neural_net import ChurnNN
 from src.models.utils.train_util import train_model
 from src.models.utils.eval_nn import evaluate_model
-
+logging.getLogger("mlflow").setLevel(logging.WARNING)
+logging.getLogger("optuna").setLevel(logging.WARNING)
 # --- Load config ---
 with open("config/config_train_nn.yaml", "r") as f:
     config = yaml.safe_load(f)
@@ -22,37 +24,53 @@ with open("config/config_train_nn.yaml", "r") as f:
 device = config["device"]
 num_epochs = config["training"]["num_epochs"]
 n_trials = config["training"]["n_trials"]
-log_path = config["paths"]["logs"]
-os.makedirs(os.path.dirname(log_path), exist_ok=True)
 
-def setup_logger(log_path):
-    logger = logging.getLogger("OptunaStudy")
-    if logger.handlers:
-        return logger
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    handler = logging.FileHandler(log_path)
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-    logger.addHandler(handler)
-    logger.addHandler(logging.StreamHandler())  # Console
-    logger.setLevel(logging.INFO)
-    return logger
+class DerivedMLflowCallback(MLflowCallback):
+    """Custom MLflow callback that logs all metrics quietly"""
+    
+    def __init__(self, metric_names=None, metric_name="f1_score"):
+        super().__init__(metric_name=metric_name)
+        self.metric_names = metric_names or ["f1_score", "accuracy", "roc_auc", "precision", "recall"]
+    
+        import mlflow
+        mlflow.set_experiment("Neuralnet_Churn_Experiment")
+    
+    def __call__(self, study, trial):
+        # Completely suppress all output during MLflow operations
+        import logging
+        mlflow_logger = logging.getLogger("mlflow")
+        original_level = mlflow_logger.getEffectiveLevel()
+        mlflow_logger.setLevel(logging.WARNING)
+        
+        try:
+            # Call parent functionality
+            super().__call__(study, trial)
+            
+            # Add our custom metrics for completed trials
+            if trial.state == optuna.trial.TrialState.COMPLETE and trial.user_attrs:
+                for key, value in trial.user_attrs.items():
+                    if any(metric in key for metric in self.metric_names):
+                        mlflow.log_metric(key, value)
+        finally:
+            # Restore original logging level
+            mlflow_logger.setLevel(original_level)
 
-logger = setup_logger(log_path=log_path)
 
-# === Optuna Logger ===
-class OptunaLogger:
+# Optuna Logger
+class OptunaLogger():
     def __init__(self, logger):
         self.logger = logger
+        
     def __call__(self, study, trial):
         if trial.state == optuna.trial.TrialState.COMPLETE:
-            self.logger.info(f"[Trial {trial.number}] F1: {trial.value:.4f} | {trial.params}")
+            self.logger.info(f"[Trial {trial.number}] F1: {trial.value:.4f} | Params: {list(trial.params.keys())}")
         elif trial.state == optuna.trial.TrialState.PRUNED:
             self.logger.warning(f"[Trial {trial.number}] Pruned")
         elif trial.state == optuna.trial.TrialState.FAIL:
-            self.logger.error(f"[Trial {trial.number}] Failed")
-        
+            self.logger.error(f"[Trial {trial.number}] Failed: {trial.user_attrs.get('error', 'Unknown error')}")
 
-optuna_logger = OptunaLogger(logger)
+optuna_logger = OptunaLogger(logging.getLogger("optuna"))
+
 
 # --- Objective function ---
 def objective(trial, X, y, device=device):
@@ -78,7 +96,11 @@ def objective(trial, X, y, device=device):
 
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     smote = SMOTE(random_state=42)
-    f1_scores = []
+    # Store all metrics
+    all_metrics = {
+        "f1_scores": [], "auc_scores": [], "accuracy_scores": [],
+        "precision_scores": [], "recall_scores": []
+    }
 
     for train_idx, test_idx in skf.split(X, y):
         X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
@@ -105,13 +127,28 @@ def objective(trial, X, y, device=device):
 
         train_model(model, train_loader, criterion, optimizer, num_epochs=num_epochs, device=device)
         _, metrics = evaluate_model(model, X_test_tensor, y_test_tensor, device=device)
-        f1_scores.append(metrics["F1"])
-
-    return np.mean(f1_scores)
+        # Collect all metrics
+        all_metrics["f1_scores"].append(metrics["F1"])
+        all_metrics["auc_scores"].append(metrics.get("AUC", 0))
+        all_metrics["accuracy_scores"].append(metrics.get("Accuracy", 0))
+        all_metrics["precision_scores"].append(metrics.get("Precision", 0))
+        all_metrics["recall_scores"].append(metrics.get("Recall", 0))
+    
+    # Calculate mean metrics
+    mean_metrics = {k: np.mean(v) for k, v in all_metrics.items()}
+    
+    # Store additional metrics as user attributes
+    trial.set_user_attr("mean_auc", mean_metrics["auc_scores"])
+    trial.set_user_attr("mean_accuracy", mean_metrics["accuracy_scores"])
+    trial.set_user_attr("mean_precision", mean_metrics["precision_scores"])
+    trial.set_user_attr("mean_recall", mean_metrics["recall_scores"])
+    
+    # Return F1 as primary objective
+    return mean_metrics["f1_scores"]
 
 # --- Run Optuna study ---
 def run_optuna_optimization(X, y, n_trials=n_trials, device=device):
-    mlflow_callback = MLflowCallback(metric_name="f1_score")
+    mlflow_callback = DerivedMLflowCallback(metric_name="f1_score")
     study = optuna.create_study(direction='maximize', study_name="Churn NN Optimization")
     study.optimize(lambda trial: objective(trial, X, y, device), n_trials=n_trials, callbacks=[optuna_logger, mlflow_callback])
     return study

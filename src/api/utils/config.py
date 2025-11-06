@@ -19,7 +19,7 @@ class APIConfig:
         self.repo_root = Path(__file__).resolve().parent.parent.parent.parent
         self.config_dir = self.repo_root / "config"
         self._config_cache = {}
-        self._validate_paths()
+        #self._validate_paths()
     
     def _validate_paths(self):
         """Validate that all required paths exist"""
