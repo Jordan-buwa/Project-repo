@@ -1,4 +1,4 @@
-from src.models.tuning.optuna_nn import run_optuna_optimization, optuna_logger
+from src.models.tuning.optuna_nn import run_optuna_optimization
 from sklearn.metrics import f1_score, accuracy_score, roc_auc_score
 from src.data_pipeline.pipeline_data import fetch_preprocessed
 from src.models.utils.util_nn import create_fold_dataloaders
@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 import mlflow.pytorch
 import numpy as np
+import pandas as pd
 import subprocess
 import warnings
 import os, sys
@@ -34,14 +35,13 @@ sys.path.append(str(Path(__file__).parent.parent))
 load_dotenv()
 
 MODEL_DIR = os.getenv("MODEL_DIR", "models/")
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
 os.makedirs(MODEL_DIR, exist_ok=True)
 #os.environ["MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING"] = "true"
 
 config_path = "config/config_train_nn.yaml"
 with open(config_path, "r") as f:
     config = yaml.safe_load(f)
-logger = optuna_logger.logger
+logger = logging.getLogger(__name__)
 
 class NeuralNetworkTrainer():
     def __init__(self, X, y, config, device, MODEL_DIR=MODEL_DIR):
@@ -51,7 +51,7 @@ class NeuralNetworkTrainer():
         self.config = config
         self.device = device
         self.best_params = None
-        self.logger = optuna_logger.logger
+        self.logger = logger
         self.random_state = self.config["training"]["random_state"]
         self.model = None
         self.num_splits_cv = self.config["training"]["num_splits_cv"]
@@ -117,11 +117,12 @@ class NeuralNetworkTrainer():
             self.dvc_hash = "N/A"
 
         # MLflow setup
-        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
+        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:8080")
+
         mlflow.set_tracking_uri(mlflow_uri)
         mlflow.set_experiment("Neuralnet_Churn_Experiment")
         self.logger.info(f"MLflow tracking URI: {mlflow_uri}")
-        with mlflow.start_run(run_name=f"NN_training_{timestamp}", nested=True):
+        with mlflow.start_run():
             script_name = os.path.basename(__file__) if "__file__" in globals() else "notebook"
             mlflow.set_tag("script_version", script_name)
             mlflow.log_param("num_samples", X.shape[0])
@@ -158,7 +159,7 @@ class NeuralNetworkTrainer():
                 mlflow.log_artifact("images/confusion_matrix.png")
                 # Predict probabilities and determine best threshold
                 self.logger.info(f"Shape of X_test: {X_test.shape}\nShape of model output: {self.model.predict_proba(X_test).shape}")
-                y_probs = self.model.predict_proba(X_test).view(1, -1)[1, :].item()
+                y_probs = self.model.predict_proba(X_test)[:, 1]
                 best_threshold, best_f1 = self.get_prediction_threshold(y_test, y_probs)
                 y_pred = (y_probs >= best_threshold).astype(int)
 
@@ -265,7 +266,9 @@ class NeuralNetworkTrainer():
         
     
 if __name__ == "__main__":
-    df_processed = fetch_preprocessed()
+    if os.path.exists("data/processed/processed_data.csv"):
+        df_processed = pd.read_csv("data/processed/processed_data.csv")
+    else: df_processed = fetch_preprocessed()
     # Features & target
     target_col = config["target_column"]
     X = df_processed.drop(columns=[target_col])

@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  #  TRAINING SERVICE 
+  train:
+    build:
+      context: .
+      dockerfile: docker/train/Dockerfile
+    container_name: churn-train
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
+      - ./logs:/app/logs
+    environment:
+      - PYTHONPATH=/app
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - mlflow
+    command: python src/models/train_xgb.py
+
+  #  MLFLOW SERVICE 
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.12.1
+    container_name: mlflow
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root /app/artifacts
+    ports:
+      - "8080:5000"
+    volumes:
+      - ./mlruns:/app/mlruns
+      - ./artifacts:/app/artifacts
+
+  #  API SERVICE 
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    container_name: churn-api-jaw
+    ports:
+      - "8000:8000"
+    depends_on:
+      - train
+      - mlflow
+    environment:
+      - POSTGRES_HOST=jaw-postgresdb.postgres.database.azure.com
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB_NAME=postgres
+      - POSTGRES_DB_USER=jawpostgresdb
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PYTHONPATH=/app
+      - MODEL_DIR=/app/models
+      - DATA_DIR=/app/data
+      - LOG_LEVEL=INFO
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
