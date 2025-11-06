@@ -219,11 +219,20 @@ class CustomerData(BaseModel):
             raise ValueError("If retcall=1, retcalls must be >= 1")
         return self
 
-    # churn must be 0 or 1 if provided
     @field_validator("churn")
     def valid_churn(cls, v):
-        if v is not None and v not in (0, 1):
-            raise ValueError("churn must be 0 or 1")
+        if v is not None:
+            # Handle both string "0"/"1" and integer 0/1
+            if isinstance(v, str):
+                if v not in ("0", "1"):
+                    raise ValueError("churn must be '0' or '1'")
+                return v
+            elif isinstance(v, int):
+                if v not in (0, 1):
+                    raise ValueError("churn must be 0 or 1")
+                return str(v)  # Convert to string for consistency
+            else:
+                raise ValueError("churn must be 0 or 1")
         return v
 
     class Config:

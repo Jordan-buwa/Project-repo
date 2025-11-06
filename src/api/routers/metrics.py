@@ -4,7 +4,7 @@ import joblib
 import json
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-from src.api.utils.config import APIConfig
+from src.api.utils.config import APIConfig, get_allowed_model_types
 from src.api.utils.response_models import MetricsResponse, TestDataset
 from src.api.utils.error_handlers import (
     ModelNotFoundError, DataNotFoundError,
@@ -40,10 +40,10 @@ def load_model(model_path: str, model_type: str):
 @router.post("/{model_type}", response_model=MetricsResponse)
 def get_metrics(model_type: str):
     """Calculate model performance metrics using standardized test data."""
-    if model_type not in config.get_allowed_model_types():
+    if model_type not in get_allowed_model_types():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"model_type must be one of: {config.get_allowed_model_types()}"
+            detail=f"model_type must be one of: {get_allowed_model_types()}"
         )
 
     try:

@@ -12,10 +12,10 @@ import joblib
 import json
 import logging
 
-from src.api.utils.config import APIConfig
+from src.api.utils.config import APIConfig, get_model_path, get_allowed_model_types
 from src.api.utils.response_models import PredictionResponse, FeatureData
 from src.api.utils.error_handlers import (
-    ModelNotFoundError, DataNotFoundError, PreprocessingError,
+     DataNotFoundError, PreprocessingError,
     handle_model_error, handle_data_error, raise_if_model_not_found
 )
 
@@ -36,7 +36,7 @@ config = APIConfig()
 def get_latest_model(model_type: str):
     """Get the latest model path using centralized configuration."""
     try:
-        model_path = config.get_model_path(model_type)
+        model_path = get_model_path(model_type)
         raise_if_model_not_found(model_path, model_type)
         return model_path
     except Exception as e:
@@ -61,16 +61,39 @@ def predict_from_payload(
     })
 ):
     """
-    Accept raw customer data → run full preprocessing → predict churn.
+    Accept raw customer data → predict churn.
     """
-    if model_type not in config.get_allowed_model_types():
+    if model_type not in get_allowed_model_types():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"model_type must be one of: {config.get_allowed_model_types()}"
+            detail=f"model_type must be one of: {get_allowed_model_types()}"
         )
 
     try:
         raw_data = payload.dict()
+
+        # Check if churn value is provided
+        provided_churn = raw_data.get('churn')
+        customer_id = raw_data.get('customer_id', 'ad-hoc')
+
+        # If churn is provided, return it as the prediction
+        if provided_churn is not None:
+            churn_value = float(provided_churn)  # Convert to float for consistency
+            prediction_data = {
+                "model_type": model_type,
+                "prediction": churn_value,
+                "model_path": "provided_in_input",
+                "customer_id": customer_id,
+                "preprocessing_applied": False,
+                "confidence": 1.0,
+                "note": "Using provided churn value from input"
+            }
+
+            return PredictionResponse(
+                status="success",
+                message="Using provided churn value as prediction",
+                data=prediction_data
+            )    
         df = pd.DataFrame([raw_data])
         
         # Use centralized artifact path
@@ -122,10 +145,10 @@ def predict_from_db_customer(
     customer_id: str,
 ):
     """Predict churn for a specific customer from database."""
-    if model_type not in config.get_allowed_model_types():
+    if model_type not in get_allowed_model_types():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"model_type must be one of: {config.get_allowed_model_types()}"
+            detail=f"model_type must be one of: {get_allowed_model_types()}"
         )
 
     try:
@@ -190,10 +213,10 @@ def predict_from_db_batch(
     limit: int = 100,
 ):
     """Return predictions for the *first N* records of a batch."""
-    if model_type not in config.get_allowed_model_types():
+    if model_type not in get_allowed_model_types():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"model_type must be one of: {config.get_allowed_model_types()}"
+            detail=f"model_type must be one of: {get_allowed_model_types()}"
         )
 
     try:

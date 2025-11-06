@@ -1,4 +1,3 @@
-# src/api/routers/model_versions.py
 import os
 import time
 import json
@@ -8,7 +7,7 @@ from mlflow.tracking import MlflowClient
 from src.api.utils.cache_utils import load_cache, save_cache
 
 load_dotenv()
-router = APIRouter(prefix="/models", tags=["Model Management"])  
+router = APIRouter(prefix="/models", tags=["Model Management"])
 
 # Configuration
 MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI")
@@ -101,7 +100,7 @@ def refresh_model_cache():
     return models
 
 
-@router.get("/")  
+@router.get("/")
 def get_all_models():
     """
     Unified endpoint: fetches model information from MLflow or local fallback.

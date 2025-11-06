@@ -99,6 +99,24 @@ class TrainingResponse(SuccessResponse):
         "started_at": "2025-10-30T10:00:00Z"
     })
 
+class JobStatusResponse(SuccessResponse):
+    """Response for training job status endpoints."""
+    data: Dict[str, Any] = Field(..., example={
+        "job_id": "550e8400-e29b-41d4-a716-446655440000",
+        "status": "running",
+        "model_type": "xgboost",
+        "script_path": "src/models/train_xgboost.py",
+        "started_at": "2025-10-30T10:00:00Z",
+        "completed_at": None,
+        "model_path": "models/xgboost_model_2025-10-30.joblib",
+        "error": None,
+        "logs": "Training started...",
+        "sub_jobs": [
+            "8b7b6a1c-4d12-4c6f-9a2f-1234567890ab",
+            "e1c2d3f4-5a6b-7c8d-9e0f-0987654321cd"
+        ]
+    })
+
 class IngestionResponse(SuccessResponse):
     """Response for data ingestion endpoints."""
     data: Dict[str, Any] = Field(..., example={
@@ -169,4 +187,10 @@ class PredictionData(BaseModel):
     model_path: Optional[str] = None
     customer_id: Optional[str] = None
     preprocessing_applied: bool = True
+    metadata: Optional[Dict[str, Any]] = None
+
+class FeatureData(BaseModel):
+    """Standardized feature data format."""
+    features: Dict[str, Union[float, int, str]]
+    customer_id: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None

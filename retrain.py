@@ -84,6 +84,34 @@ class ModelRetrainer:
                 self.logger.warning(f"Data quality check failed: {check_name}")
         
         return all(checks.values())
+    def generate_test_data_simple(self, X: pd.DataFrame, y: pd.Series) -> str:
+        """Simple approach: use a stratified sample from the data"""
+        from sklearn.model_selection import train_test_split
+        
+        # Create a proper test split
+        _, X_test, _, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
+        )
+        
+        test_data = {
+            "samples": []
+        }
+        
+        for idx in range(len(X_test)):
+            sample = {
+                "features": X_test.iloc[idx].to_dict(),
+                "target": int(y_test.iloc[idx]),
+                "sample_id": f"test_{idx}"
+            }
+            test_data["samples"].append(sample)
+        
+        # Save to file
+        test_file_path = "test_input.json"
+        with open(test_file_path, 'w') as f:
+            import json
+            json.dump(test_data, f, indent=2)
+        
+        return test_file_path
     
     def retrain_xgboost(self, X: pd.DataFrame, y: pd.Series) -> Dict:
         """Retrain XGBoost model"""
@@ -234,7 +262,7 @@ class ModelRetrainer:
         
         try:
             # Step 1: Fetch and validate data
-            self.logger.info("Step 1: Fetching preprocessed data...")
+            self.logger.info("Fetching preprocessed data...")
             df_processed = fetch_preprocessed()
             
             if not self.validate_data_quality(df_processed):
@@ -246,9 +274,10 @@ class ModelRetrainer:
             y = df_processed[target_col]
             
             self.logger.info(f"Data prepared: {X.shape[0]} samples, {X.shape[1]} features")
-            
+            self.generate_test_data_simple(X, y)
+
             # Step 2: Retrain models
-            self.logger.info("Step 2: Retraining models...")
+            self.logger.info("Retraining models...")
             
             if "xgboost" in self.models_to_retrain:
                 results.append(self.retrain_xgboost(X, y))
@@ -260,7 +289,7 @@ class ModelRetrainer:
                 results.append(self.retrain_neural_network(X, y))
             
             # Step 3: Evaluate results
-            self.logger.info("Step 3: Evaluating retraining results...")
+            self.logger.info("Evaluating retraining results...")
             evaluation = self.evaluate_model_performance(results)
             
             # Step 4: Generate report

@@ -5,9 +5,54 @@ import logging
 import traceback
 import uuid
 
-from .response_models import ErrorResponse, ValidationErrorResponse, ErrorCode, ResponseStatus
-
 logger = logging.getLogger(__name__)
+try:
+    from .response_models import ErrorResponse, ValidationErrorResponse, ErrorCode, ResponseStatus
+except ImportError:
+    # Fallback minimal definitions
+    from enum import Enum
+    
+    class ResponseStatus(str, Enum):
+        SUCCESS = "success"
+        ERROR = "error"
+        WARNING = "warning"
+        PENDING = "pending"
+    
+    class ErrorCode(str, Enum):
+        BAD_REQUEST = "BAD_REQUEST"
+        UNAUTHORIZED = "UNAUTHORIZED"
+        FORBIDDEN = "FORBIDDEN"
+        NOT_FOUND = "NOT_FOUND"
+        INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
+        VALIDATION_FAILED = "VALIDATION_FAILED"
+        MODEL_NOT_FOUND = "MODEL_NOT_FOUND"
+        DATA_NOT_FOUND = "DATA_NOT_FOUND"
+        PREPROCESSING_FAILED = "PREPROCESSING_FAILED"
+        TRAINING_FAILED = "TRAINING_FAILED"
+        PREDICTION_FAILED = "PREDICTION_FAILED"
+
+    # Minimal Pydantic models for error handling
+    from pydantic import BaseModel
+    from datetime import datetime
+    
+    class APIResponse(BaseModel):
+        status: ResponseStatus
+        message: str
+        timestamp: str = None
+        
+        def __init__(self, **data):
+            if 'timestamp' not in data:
+                data['timestamp'] = datetime.utcnow().isoformat()
+            super().__init__(**data)
+    
+    class ErrorResponse(APIResponse):
+        status: ResponseStatus = ResponseStatus.ERROR
+        error_code: ErrorCode
+        detail: Optional[str] = None
+    
+    class ValidationErrorResponse(ErrorResponse):
+        error_code: ErrorCode = ErrorCode.VALIDATION_FAILED
+        field_errors: Optional[Dict[str, List[str]]] = None
 
 class APIError(Exception):
     """Base exception for API errors."""

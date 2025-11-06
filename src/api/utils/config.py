@@ -85,17 +85,17 @@ def get_model_path(model_type: str) -> str:
     
     # Model file extensions mapping
     model_extensions = {
-        "neural-net": ".pth",
-        "xgboost": ".joblib", 
-        "random-forest": ".joblib"
+        "neural-net": [".pth", ".pt", ".h5"],
+        "xgboost": [".joblib", ".pkl"], 
+        "random-forest": [".joblib", ".pkl"]
     }
     
-    ext = model_extensions.get(model_type, ".joblib")
+    ext = model_extensions.get(model_type, [".joblib", ".pth", ".pkl"])
     
     # Find latest model file
     model_files = [
         f for f in model_dir.iterdir()
-        if f.is_file() and f.suffix == ext and model_type.replace("-", "") in f.name.lower()
+        if f.is_file() and f.suffix in ext and model_type.replace("-", "") in f.name.lower()
     ]
     
     if not model_files:
