@@ -35,7 +35,7 @@ class DataPreprocessor:
         with open(config_path, "r") as file:
             self.config = yaml.safe_load(file)
 
-        if data_raw:
+        if data_raw is not None:
             # Use provided DataFrame
             self.df = data_raw.copy()
         else: 
@@ -389,6 +389,7 @@ class DataPreprocessor:
                 raise ValueError(f"Data contains NaNs after preprocessing in: {nan_cols}")
             
             self.save_preprocessed_data()
+            _ = self.get_feature_names()
             self.logger.info("Preprocessing pipeline completed successfully.")
             print("Preprocessing pipeline completed successfully.")
             return self.df
@@ -399,7 +400,8 @@ class DataPreprocessor:
 
     def get_feature_names(self) -> list[str]:
         """Return the expected feature names for model input"""
-        return [col for col in self.df.columns if col != self.target_col]
+        self.columns = self.df.columns
+        return [col for col in self.columns if col != self.target_col]
 
 
 
@@ -733,20 +735,3 @@ def save_enhanced_preprocessing_artifacts(preprocessor_instance):
     
     preprocessor_instance.logger.info(f"Enhanced artifacts saved to {artifacts_path}")
     return artifacts_path
-
-
-
-
-if __name__ == "__main__":
-    
-    ingestion = DataIngestion("config/config_ingest.yaml")
-    df_raw = ingestion.load_data()
-    preprocessor = DataPreprocessor(
-        config_path="config/config_process.yaml",
-        data_raw=df_raw)
-    preprocessor.run_preprocessing_pipeline()   
-    save_enhanced_preprocessing_artifacts(preprocessor) 
-
-    ProductionPreprocessor(
-    artifacts_path="src/data_pipeline/preprocessing_artifacts.json"
-    )
