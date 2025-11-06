@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# logs-data_pipeline.sh
+
 # Function to show usage
 usage() {
     echo "Usage: $0 [service] [options]"

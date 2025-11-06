@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# start-data_pipeline.sh
 set -e
 
 echo "Starting Data Pipeline services..."
+
+# Navigate to project root
+cd ../../..
 
 # Create network if it doesn't exist
 docker network create data-pipeline-network 2>/dev/null || true
