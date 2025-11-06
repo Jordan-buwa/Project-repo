@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Dict, Optional
 from pathlib import Path
 
-from src.api.utils.config import APIConfig
+from src.api.utils.config import APIConfig, get_allowed_model_types
 from src.api.utils.response_models import TrainingResponse, JobStatusResponse
 from src.api.utils.error_handlers import TrainingError, handle_training_error
 
@@ -170,7 +170,7 @@ def find_latest_model_file(model_type: str) -> Optional[str]:
 
 def get_script_path(model_type: str) -> str:
     """Get the script path for the specified model type."""
-    allowed_types = config.get_allowed_model_types()
+    allowed_types = get_allowed_model_types()
     
     script_map = {
         "neural-net": "src/models/churn_nn.py",
@@ -186,7 +186,7 @@ def get_script_path(model_type: str) -> str:
     
     return script_map[model_type]
 
-@router.post("/train/{model_type}", response_model=TrainingResponse)
+@router.post("/{model_type}", response_model=TrainingResponse)
 async def train_model(
     model_type: str,
     background_tasks: BackgroundTasks,
@@ -233,7 +233,7 @@ async def train_model(
         raise
     except Exception as e:
         logger.error(f"Error starting training job: {str(e)}")
-        handle_training_error(e)
+        handle_training_error(model_type, e)
 
 @router.post("/{job_id}", response_model=TrainingResponse)
 async def train_model_with_config(
@@ -316,7 +316,7 @@ async def start_single_training(
     
     return job_id
 
-@router.get("/train/status/{job_id}", response_model=JobStatusResponse)
+@router.get("/status/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(job_id: str):
     """
     Get the status of a training job.
@@ -348,7 +348,7 @@ async def get_job_status(job_id: str):
         data=job_info
     )
 
-@router.get("/train/jobs")
+@router.get("/jobs")
 async def list_jobs(limit: int = 10, status: Optional[str] = None):
     """
     List all training jobs with optional filtering.
@@ -371,7 +371,7 @@ async def list_jobs(limit: int = 10, status: Optional[str] = None):
         "filtered_count": len(jobs_list[:limit])
     }
 
-@router.delete("/train/job/{job_id}")
+@router.delete("/job/cancel/{job_id}")
 async def cancel_job(job_id: str):
     """
     Cancel a training job (if possible).
@@ -405,11 +405,10 @@ async def cancel_job(job_id: str):
         "message": f"Job {job_id} cancelled successfully", 
         "data": {"job_id": job_id}
     }
-
-@router.get("/train/models/available")
+@router.get("/models/available")
 async def get_available_models():
     """Get list of available trained models in the models directory."""
-    models_dir = Path(config.models_dir)
+    models_dir = Path(config.model_dir)
     available_models = {}
     
     if models_dir.exists():

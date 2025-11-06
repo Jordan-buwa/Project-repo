@@ -61,7 +61,7 @@ def predict_from_payload(
     })
 ):
     """
-    Accept raw customer data → run full preprocessing → predict churn.
+    Accept raw customer data → predict churn.
     """
     if model_type not in get_allowed_model_types():
         raise HTTPException(
@@ -71,6 +71,29 @@ def predict_from_payload(
 
     try:
         raw_data = payload.dict()
+
+        # Check if churn value is provided
+        provided_churn = raw_data.get('churn')
+        customer_id = raw_data.get('customer_id', 'ad-hoc')
+
+        # If churn is provided, return it as the prediction
+        if provided_churn is not None:
+            churn_value = float(provided_churn)  # Convert to float for consistency
+            prediction_data = {
+                "model_type": model_type,
+                "prediction": churn_value,
+                "model_path": "provided_in_input",
+                "customer_id": customer_id,
+                "preprocessing_applied": False,
+                "confidence": 1.0,
+                "note": "Using provided churn value from input"
+            }
+
+            return PredictionResponse(
+                status="success",
+                message="Using provided churn value as prediction",
+                data=prediction_data
+            )    
         df = pd.DataFrame([raw_data])
         
         # Use centralized artifact path

@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 sys.path.append(str(Path(__file__).parent.parent))
 
 from api.ml_models import load_all_models, clear_models, get_all_models_info
-from api.routers import predict, train, validate, metrics
+from api.routers import predict, train, validate, metrics, ingest
 from api.utils.error_handlers import api_exception_handler, validation_exception_handler
 
 
@@ -92,6 +92,7 @@ app.include_router(predict.router, tags=["predictions"])
 app.include_router(train.router, tags=["training"])
 app.include_router(validate.router, tags=["Data Validation"])
 app.include_router(metrics.router, tags=["metrics"])
+app.include_router(ingest.router, tags=["Data ingestion"])
 
 @app.get("/")
 async def root():
