@@ -19,8 +19,9 @@ import numpy as np
 from mlflow.models import infer_signature
 import json
 from pathlib import Path
+from dotenv import load_dotenv
 sys.path.append(str(Path(__file__).parent.parent))
-
+load_dotenv()
 [warnings.filterwarnings("ignore", category=c)
  for c in (UserWarning, FutureWarning)]
 os.environ["MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING"] = "true"
