@@ -1,16 +1,37 @@
 #!/bin/bash
-echo "Starting Data Validation API (Alternative)..."
 
-docker stop data_validation_api_alt 2>/dev/null
-docker rm data_validation_api_alt 2>/dev/null
+# start-data_pipeline.sh
+set -e
 
+echo "Starting Data Pipeline services..."
+
+# Create network if it doesn't exist
+docker network create data-pipeline-network 2>/dev/null || true
+
+# Start API Validation service
+echo "Starting API Validation service..."
 docker run -d \
-    --name data_validation_api_alt \
-    -p 8081:8080 \
-    -v $(pwd)/../models:/app/models \
-    -v $(pwd)/../config:/app/config \
-    -v $(pwd)/../data:/app/data \
-    -v $(pwd)/../src:/app/src \
-    data-validation-api-alt:latest
+    --name api-validation \
+    --network data-pipeline-network \
+    -p 8000:8000 \
+    -v $(pwd)/logs:/app/logs \
+    -v $(pwd)/data:/app/data \
+    --env-file .env \
+    api-validation:latest
 
-echo "Alternative Data Validation API started on port 8081"
+# Start Data Pipeline service
+echo "Starting Data Pipeline service..."
+docker run -d \
+    --name data-pipeline \
+    --network data-pipeline-network \
+    -v $(pwd)/logs:/app/logs \
+    -v $(pwd)/data:/app/data \
+    --env-file .env \
+    data-pipeline:latest
+
+echo "Services started successfully!"
+echo ""
+echo "Running containers:"
+docker ps --filter "name=api-validation\|data-pipeline"
+echo ""
+echo "API Validation available at: http://localhost:8000"
