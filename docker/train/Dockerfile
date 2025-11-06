@@ -40,4 +40,4 @@ ENV MLFLOW_EXPERIMENT_NAME=Churn_Training
 EXPOSE 5000
 
 # Run neural_net training script
-CMD ["python", "src/models/train_xgboost.py"]
+CMD ["python", "src/models/train_xgb.py"]

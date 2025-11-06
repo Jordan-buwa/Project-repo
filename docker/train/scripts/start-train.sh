@@ -49,7 +49,7 @@ echo "Artifacts Directory: ./artifacts"
 echo ""
 
 # Array of training scripts
-TRAIN_SCRIPTS=("train_RandomForest.py" "train_xgboost.py" "churn_nn.py")
+TRAIN_SCRIPTS=("train_rf.py" "train_xgb.py" "train_nn.py")
 
 # Run each training script in sequence
 for SCRIPT in "${TRAIN_SCRIPTS[@]}"; do
