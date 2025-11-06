@@ -80,7 +80,7 @@ class SetupValidator:
         logger.info("Validating model types...")
         
         try:
-            from .model_types import ModelType, normalize_model_type, validate_model_type
+            from .models_types import ModelType, normalize_model_type, validate_model_type
             
             # Test normalization
             test_cases = [
