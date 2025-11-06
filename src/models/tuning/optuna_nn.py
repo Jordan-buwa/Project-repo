@@ -11,7 +11,7 @@ from optuna.integration import MLflowCallback
 import logging
 from sklearn.impute import SimpleImputer
 import os
-from src.models.train_NN.neural_net import ChurnNN
+from src.models.network.neural_net import ChurnNN
 from src.models.utils.train_util import train_model
 from src.models.utils.eval_nn import evaluate_model
 
@@ -29,15 +29,24 @@ def setup_logger(log_path):
     logger = logging.getLogger("OptunaStudy")
     if logger.handlers:
         return logger
+    
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     handler = logging.FileHandler(log_path)
     handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
     logger.addHandler(handler)
-    logger.addHandler(logging.StreamHandler())  # Console
+    
+    # Console handler with simpler format
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
+    logger.addHandler(console_handler)
+    
     logger.setLevel(logging.INFO)
+    
+    # Set other loggers to WARNING
+    logging.getLogger("mlflow").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    
     return logger
-
-logger = setup_logger(log_path=log_path)
 
 # === Optuna Logger ===
 class OptunaLogger:
@@ -52,7 +61,7 @@ class OptunaLogger:
             self.logger.error(f"[Trial {trial.number}] Failed")
         
 
-optuna_logger = OptunaLogger(logger)
+optuna_logger = OptunaLogger(setup_logger(log_path))
 
 # --- Objective function ---
 def objective(trial, X, y, device=device):

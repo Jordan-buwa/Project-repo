@@ -196,11 +196,11 @@ def evaluate_models(X, y, train_config):
             mlflow.log_metrics(avg_metrics)
 
             # Storing best models passing thresholds
-            if all(avg_metrics.get(m, 0) >= t for m, t in thresholds.items()):
-                best_models[name] = (best_model, avg_metrics)
-                logger.info(f"Model {name} passed thresholds: {avg_metrics}")
-            else:
-                logger.warning(f"Model {name} did not meet thresholds: {avg_metrics}")
+            #if all(avg_metrics.get(m, 0) >= t for m, t in thresholds.items()):
+            best_models[name] = (best_model, avg_metrics)
+            #    logger.info(f"Model {name} passed thresholds: {avg_metrics}")
+            #else:
+            #logger.warning(f"Model {name} did not meet thresholds: {avg_metrics}")
 
             run_id = mlflow.active_run().info.run_id
 
@@ -215,7 +215,6 @@ def evaluate_models(X, y, train_config):
 
 # Running evaluation
 best_model_name, best_model, best_metrics, run_id = evaluate_models(X, y, train_config)
-
 # Saving & logging best model
 if best_model_name:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -43,6 +43,10 @@ with open(config_path, "r") as f:
     config = yaml.safe_load(f)
 logger = optuna_logger.logger
 
+import logging
+mlflow_logger = logging.getLogger("mlflow")
+mlflow_logger.setLevel(logging.WARNING)
+
 class NeuralNetworkTrainer():
     def __init__(self, X, y, config, device, MODEL_DIR=MODEL_DIR):
         os.makedirs(MODEL_DIR, exist_ok=True)
@@ -81,8 +85,15 @@ class NeuralNetworkTrainer():
     def evaluate_model(self, X_test_tensor, y_test_tensor):
         return evaluate_model(self.model, X_test_tensor, y_test_tensor, self.device)
 
-    
     def get_prediction_threshold(self, y_true, y_probs):
+        """Find optimal threshold for binary classification"""
+        if isinstance(y_probs, torch.Tensor):
+            y_probs = y_probs.cpu().numpy()
+        
+        # Ensure y_probs is 1D array
+        if len(y_probs.shape) > 1:
+            y_probs = y_probs.flatten()
+        
         best_thresh, best_f1 = 0.5, 0
         for t in [i * 0.01 for i in range(1, 100)]:
             preds = (y_probs >= t).astype(int)
@@ -91,6 +102,7 @@ class NeuralNetworkTrainer():
                 best_f1 = score
                 best_thresh = t
         return best_thresh, best_f1
+    
     def train_and_tune(self):
         # Run Optuna optimization
         self.logger.info("Starting hyperparameter optimization with Optuna...")
@@ -157,8 +169,15 @@ class NeuralNetworkTrainer():
                 plt.savefig("images/confusion_matrix.png")
                 mlflow.log_artifact("images/confusion_matrix.png")
                 # Predict probabilities and determine best threshold
-                self.logger.info(f"Shape of X_test: {X_test.shape}\nShape of model output: {self.model.predict_proba(X_test).shape}")
-                y_probs = self.model.predict_proba(X_test).view(1, -1)[1, :].item()
+                
+                self.logger.info(f"Shape of X_test: {X_test.shape}")
+                y_probs = self.model.predict_proba(X_test)
+
+                # Ensure y_probs is 1D array
+                if len(y_probs.shape) > 1:
+                    y_probs = y_probs.flatten()
+
+                self.logger.info(f"Shape of model output: {y_probs.shape}")
                 best_threshold, best_f1 = self.get_prediction_threshold(y_test, y_probs)
                 y_pred = (y_probs >= best_threshold).astype(int)
 
@@ -210,7 +229,9 @@ class NeuralNetworkTrainer():
                 y_true_global, y_pred_global, average="binary")
             self.logger.info(f"Global F1 across all folds: {global_f1:.4f}")
             mlflow.log_metric("global_f1", global_f1)
-            y_probs_full = self.model.predict_proba(X)[:, 1]
+            y_probs_full = self.model.predict_proba(X)
+            if len(y_probs_full.shape) > 1:
+                y_probs_full = y_probs_full.flatten()
             best_threshold, best_f1 = self.get_prediction_threshold(y, y_probs_full)
             y_pred_full = (y_probs_full >= best_threshold).astype(int)
 
