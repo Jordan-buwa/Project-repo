@@ -173,9 +173,9 @@ def get_script_path(model_type: str) -> str:
     allowed_types = get_allowed_model_types()
     
     script_map = {
-        "neural-net": "src/models/train_nn.py",
-        "xgboost": "src/models/train_xgb.py", 
-        "random-forest": "src/models/train_rf.py"
+        "neural-net": "src/models/churn_nn.py",
+        "xgboost": "src/models/train_xgboost.py", 
+        "random-forest": "src/models/train_RandomForest.py"
     }
     
     if model_type not in allowed_types:

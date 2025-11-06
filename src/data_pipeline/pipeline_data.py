@@ -14,6 +14,6 @@ def fetch_preprocessed():
     df_processed = processor.run_preprocessing_pipeline()
     save_enhanced_preprocessing_artifacts(processor) 
 
-    df = validate_dataframe(df_processed, "config/config_process.yaml", processor)
+    df = validate_dataframe(df_processed, "config/config_process.yaml")
     return df
 

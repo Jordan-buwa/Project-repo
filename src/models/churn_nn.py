@@ -4,7 +4,7 @@ from src.data_pipeline.pipeline_data import fetch_preprocessed
 from src.models.utils.util_nn import create_fold_dataloaders
 from src.models.utils.eval_nn import evaluate_model
 from src.models.utils.train_util import train_model
-from src.models.network.neural_net import ChurnNN
+from src.models.train_NN.neural_net import ChurnNN
 
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import classification_report
