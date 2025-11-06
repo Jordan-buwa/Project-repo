@@ -1,141 +1,23 @@
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import logging
-import sys
-from pathlib import Path
-from contextlib import asynccontextmanager
+# src/api/main.py
+from fastapi import FastAPI
+from .model_versions import router as model_versions_router
+from .data_validation import router as data_validation_router
 
-# Add parent directory to path
-sys.path.append(str(Path(__file__).parent.parent))
-
-from api.ml_models import load_all_models, clear_models, get_all_models_info
-from api.routers import predict, train, validate, metrics, ingest
-from api.utils.error_handlers import api_exception_handler, validation_exception_handler
-
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Lifespan context manager for startup and shutdown events
-    """
-    # Startup
-    logger.info("Starting API server...")
-    
-    try:
-        # Load all models at startup
-        logger.info("Loading ML models...")
-        models = load_all_models()
-        logger.info(f"Loaded {len(models)} models successfully")
-        
-        # Log model info
-        models_info = get_all_models_info()
-        for model_type, info in models_info.items():
-            if info['loaded']:
-                logger.info(f"  - {model_type}: Loaded from {info['metadata'].get('path')}")
-            else:
-                logger.warning(f"  - {model_type}: Not loaded")
-    
-    except Exception as e:
-        logger.error(f"Error loading models at startup: {str(e)}")
-        logger.warning("API will start but some endpoints may not work without models")
-    
-    yield
-    
-    # Shutdown
-    logger.info("Shutting down API server...")
-    try:
-        clear_models()
-        logger.info("Cleared models from memory")
-    except Exception as e:
-        logger.error(f"Error during shutdown: {str(e)}")
-# Create FastAPI app with lifespan
 app = FastAPI(
-    title="Churn Prediction API",
-    description="API for training and predicting customer churn using multiple ML models",
+    title="Model Versioning and Data Validation API",
+    description="API for managing MLflow model versions and validating incoming datasets.",
     version="1.0.0",
-    lifespan=lifespan
 )
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-# Exception handlers
-app.add_exception_handler(Exception, api_exception_handler)
-
-# Legacy global exception handler (keep for backward compatibility)
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Global exception handler caught: {str(exc)}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Internal server error",
-            "error": str(exc)
-        }
-    )
-
-# Include routers
-app.include_router(predict.router, tags=["predictions"])
-app.include_router(train.router, tags=["training"])
-app.include_router(validate.router, tags=["Data Validation"])
-app.include_router(metrics.router, tags=["metrics"])
-app.include_router(ingest.router, tags=["Data ingestion"])
-
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "message": "Churn Prediction API",
-        "version": "1.0.0",
-        "endpoints": {
-            "docs": "/docs",
-            "health": "/health",
-            "models": "/models"
-        }
-    }
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    models_info = get_all_models_info()
-    
-    loaded_models = [
-        model_type for model_type, info in models_info.items() 
-        if info['loaded']
-    ]
-    
-    return {
-        "status": "healthy",
-        "models_loaded": len(loaded_models),
-        "models": models_info
-    }
+def health_check():
+    """
+    Simple health check endpoint to confirm the API is running.
+    """
+    return {"status": "ok", "message": "API is running smoothly"}
 
-@app.get("/models")
-async def get_models_status():
-    """Get status of all loaded models"""
-    return {
-        "models": get_all_models_info()
-    }
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+# Register routers
+app.include_router(model_versions_router)
+app.include_router(data_validation_router)
