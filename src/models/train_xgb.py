@@ -16,6 +16,7 @@ import mlflow
 import traceback
 import mlflow.xgboost
 import numpy as np
+import pandas as pd
 from mlflow.models import infer_signature
 import json
 from pathlib import Path
@@ -114,7 +115,7 @@ class XGBoostTrainer:
         except Exception:
             dvc_hash = "N/A"
 
-        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
+        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:8080")
         mlflow.set_tracking_uri(mlflow_uri)
 
         experiment_name = "XGBoost_Churn_Experiment"
@@ -339,7 +340,9 @@ if __name__ == "__main__":
         config["logging"]["log_path"], config["logging"]["log_level"])
     logger.info("Loading preprocessed data...")
 
-    df_processed = fetch_preprocessed()
+    if os.path.exists("data/processed/processed_data.csv"):
+        df_processed = pd.read_csv("data/processed/processed_data.csv")
+    else: df_processed = fetch_preprocessed()
     target_col = config["target_column"]
     logger.info(f"Target column: {target_col}")
 

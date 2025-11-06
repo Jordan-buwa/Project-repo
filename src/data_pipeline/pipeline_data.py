@@ -15,5 +15,6 @@ def fetch_preprocessed():
     save_enhanced_preprocessing_artifacts(processor) 
 
     df = validate_dataframe(df_processed, "config/config_process.yaml", processor)
+    df.to_csv("data/processed/processed_data.csv", sep = ",", encoding="utf8", index=False)
     return df
 
