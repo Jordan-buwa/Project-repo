@@ -5,6 +5,7 @@ import logging
 from typing import Dict, Any
 import os
 from datetime import datetime
+from src.data_pipeline.preprocess import DataPreprocessor
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
@@ -20,7 +21,7 @@ logging.basicConfig(
 )
 
 
-def validate_dataframe(df: pd.DataFrame, config_path: str) -> pd.DataFrame:
+def validate_dataframe(df: pd.DataFrame, config_path: str, preprocessor: DataPreprocessor) -> pd.DataFrame:
     config = load_config(config_path)
     #logging = setup_logger(log_path, config["logging"]["log_level"])
 
@@ -32,8 +33,8 @@ def validate_dataframe(df: pd.DataFrame, config_path: str) -> pd.DataFrame:
     df.columns = [c.strip().lower() for c in df.columns]
     drop_cols_lower = [c.lower() for c in drop_cols]
     df = df.drop(columns=[c for c in df.columns if c in drop_cols_lower], errors="ignore")
-
-    expected_cols_lower = [c.lower() for c in schema.keys()] 
+    columns = preprocessor.columns
+    expected_cols_lower = [c.lower() for c in columns] 
     missing_cols = [c for c in expected_cols_lower if c not in df.columns]
     extra_cols = [c for c in df.columns if c not in expected_cols_lower]
 
