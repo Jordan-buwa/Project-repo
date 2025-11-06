@@ -18,7 +18,8 @@ from src.api.utils.error_handlers import (
      DataNotFoundError, PreprocessingError,
     handle_model_error, handle_data_error, raise_if_model_not_found
 )
-
+from src.api.utils.models_types import ModelType, validate_model_type
+from src.api.ml_models import get_model_path, get_model
 router = APIRouter(prefix="/predict")
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,12 @@ config = APIConfig()
 def get_latest_model(model_type: str):
     """Get the latest model path using centralized configuration."""
     try:
+        if not validate_model_type(model_type):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid model type. Must be one of: {ModelType.get_all_types()}"
+            )
+        
         model_path = get_model_path(model_type)
         raise_if_model_not_found(model_path, model_type)
         return model_path
@@ -44,7 +51,9 @@ def get_latest_model(model_type: str):
 
 
 def load_model(model_path: str, model_type: str):
-    if model_type == "neural-net":
+    normalized_type = model_type.replace("-", "_")
+    
+    if normalized_type == ModelType.NEURAL_NET:
         import torch
         model = torch.load(model_path)
         model.eval()
@@ -66,7 +75,7 @@ def predict_from_payload(
     if model_type not in get_allowed_model_types():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"model_type must be one of: {get_allowed_model_types()}"
+            detail=f"model_type must be one of: {ModelType.get_all_types()}"
         )
 
     try:
@@ -96,7 +105,6 @@ def predict_from_payload(
             )    
         df = pd.DataFrame([raw_data])
         
-        # Use centralized artifact path
         artifact_path = config.preprocessing_artifacts_path
         if not os.path.exists(artifact_path):
             raise PreprocessingError(f"Preprocessing artifacts not found at {artifact_path}")
@@ -111,7 +119,7 @@ def predict_from_payload(
         model_path = get_latest_model(model_type)
         model = load_model(model_path, model_type)
 
-        if model_type == "neural-net":
+        if model_type.replace("-", "_") == ModelType.NEURAL_NET:
             import torch
             tensor = torch.tensor(X, dtype=torch.float32)
             with torch.no_grad():
