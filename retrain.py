@@ -160,7 +160,7 @@ class ModelRetrainer:
                 rf_config = yaml.safe_load(f)
             
             # Use the existing evaluate_models function
-            best_model_name, best_model, best_metrics, run_id = rf_evaluate(X, y, rf_config)
+            _, best_model, best_metrics, _ = rf_evaluate(X, y, rf_config)
             
             if best_model:
                 # Save model locally
