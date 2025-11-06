@@ -4,6 +4,8 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
+from .utils.models_types import ModelType, validate_model_type, normalize_model_type
+
 
 logger = logging.getLogger(__name__)
 
@@ -22,30 +24,24 @@ def get_model_path(model_type: str) -> Path:
     """
     Get the most recent model file from the 'models/' directory that matches
     the identifier for the given model_type.
-    
-    Identifiers:
-        - 'xgboost': contains 'xgboost' or 'xgb' (case-insensitive)
-        - 'random_forest': contains 'random_forest', 'random-forest', or 'rf' (case-insensitive)
-        - 'neural_net': contains 'neural', 'nn', or ends with '.pth', '.h5', '.pt'
-    
-    Raises:
-        FileNotFoundError: If no matching model is found.
-        ValueError: If the model_type is unknown.
     """
+    # Normalize model type first
+    normalized_type = normalize_model_type(model_type)
+    
+    if not validate_model_type(normalized_type):
+        raise ValueError(f"Unknown model type: {model_type}. Supported: {ModelType.get_all_types()}")
+    
     models_dir = Path("models/")
     if not models_dir.exists() or not models_dir.is_dir():
         raise FileNotFoundError(f"Models directory not found: {models_dir}")
 
     identifiers = {
-        "xgboost": {"xgboost", "xgb"},
-        "random_forest": {"random_forest", "random-forest", "rf", ".joblib"},
-        "neural_net": {"neural", "nn", ".pth", ".h5", ".pt"},  # suffixes treated as "contains"
+        ModelType.XGBOOST: {"xgboost", "xgb"},
+        ModelType.RANDOM_FOREST: {"random_forest", "random-forest", "rf", ".joblib"},
+        ModelType.NEURAL_NET: {"neural", "nn", ".pth", ".h5", ".pt"},
     }
 
-    if model_type not in identifiers:
-        raise ValueError(f"Unknown model type: {model_type}. Supported: {list(identifiers.keys())}")
-
-    patterns = identifiers[model_type]
+    patterns = identifiers[normalized_type]
     
     candidates: list[tuple[float, Path]] = []
     
@@ -117,22 +113,23 @@ def load_single_model(model_type: str, force_reload: bool = False) -> Optional[A
     Load a single model by type
     """
     try:
-        # Check if model is already loaded and not forcing reload
-        if model_type in ml_models and not force_reload:
-            logger.info(f"Model {model_type} already loaded, using cached version")
-            return ml_models[model_type]
+        normalized_type = normalize_model_type(model_type)
         
-        path = get_model_path(model_type)
+        if normalized_type in ml_models and not force_reload:
+            logger.info(f"Model {normalized_type} already loaded, using cached version")
+            return ml_models[normalized_type]
+        
+        path = get_model_path(normalized_type)
         
         # Load based on model type
-        if model_type == 'neural_net':
+        if normalized_type == ModelType.NEURAL_NET:
             model = load_torch_model(path)
         else:
             model = load_pickle_model(path)
         
         # Store model and metadata
-        ml_models[model_type] = model
-        model_metadata[model_type] = {
+        ml_models[normalized_type] = model
+        model_metadata[normalized_type] = {
             'loaded_at': datetime.utcnow().isoformat(),
             'path': str(path),
             'size': path.stat().st_size,
@@ -153,7 +150,7 @@ def load_all_models(force_reload: bool = False) -> Dict[str, Any]:
     """
     Load all ML models at startup
     """
-    model_types = ['xgboost', 'random_forest', 'neural_net']
+    model_types = ModelType.get_all_types()    
     loaded_count = 0
     failed_models = []
     
@@ -219,7 +216,7 @@ def get_all_models_info() -> Dict[str, Dict]:
             'loaded': is_model_loaded(model_type),
             'metadata': model_metadata.get(model_type, {})
         }
-        for model_type in ['xgboost', 'random_forest', 'neural_net']
+        for model_type in ModelType.get_all_types()
     }
 
 def clear_models():

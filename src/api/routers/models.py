@@ -99,7 +99,6 @@ def refresh_model_cache():
     _cache["last_update"] = time.time()
     return models
 
-
 @router.get("/")
 def get_all_models():
     """
