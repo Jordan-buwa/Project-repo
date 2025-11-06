@@ -25,7 +25,7 @@ DB_CONFIG = {
     'database': os.getenv('POSTGRES_DB_NAME', 'churn_db'),
     'user': os.getenv('POSTGRES_DB_USER', 'postgres'),
     'password': os.getenv('POSTGRES_PASSWORD', 'postgres'),
-    'sslmode': 'require'  # Azure PostgreSQL requires SSL
+    'sslmode': 'require'
 }
 
 # Connection pool (min 2 connections, max 10)
@@ -231,6 +231,7 @@ def save_customer_data(data: CustomerData, batch_id: str) -> bool:
 
             # Convert to features JSON
             features_dict = data.dict(exclude={'customer_id', 'source', 'timestamp', 'batch_id'})
+            features_json = json.dumps(features_dict)
             cursor.execute("""
                 INSERT INTO customer_data (
                     customer_id, unnamed_0, x, customer, traintest, churndep, revenue, mou, recchrge,

@@ -9,10 +9,9 @@ from contextlib import asynccontextmanager
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from api.ml_models import load_all_models, clear_models, get_all_models_info
-from api.routers import predict, train, validate, metrics, ingest
-from api.utils.error_handlers import api_exception_handler, validation_exception_handler
-
+from src.api.ml_models import load_all_models, clear_models, get_all_models_info
+from src.api.routers import predict, train, validate, metrics, ingest
+from src.api.utils.error_handlers import api_exception_handler, validation_exception_handler
 
 # Configure logging
 logging.basicConfig(
@@ -20,6 +19,35 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+def validate_startup():
+    """Run startup validation"""
+    try:
+        logger.info("Running startup validation...")
+        
+        # Import and run validator
+        from src.api.utils.setup_validator import validate_api_setup
+        
+        success, errors, warnings = validate_api_setup()
+        
+        # Log warnings
+        for warning in warnings:
+            logger.warning(f"Startup warning: {warning}")
+        
+        # Log errors and exit if critical
+        for error in errors:
+            logger.error(f"Startup error: {error}")
+        
+        if not success:
+            logger.error("Startup validation failed with critical errors")
+            return False
+        else:
+            logger.info("Startup validation completed successfully")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Startup validation crashed: {str(e)}")
+        return False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -29,7 +57,11 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting API server...")
     
-    try:
+    # Run validation first
+    if not validate_startup():
+        logger.error("Startup validation failed, but continuing...")
+    
+    try:      
         # Load all models at startup
         logger.info("Loading ML models...")
         models = load_all_models()
@@ -44,8 +76,8 @@ async def lifespan(app: FastAPI):
                 logger.warning(f"  - {model_type}: Not loaded")
     
     except Exception as e:
-        logger.error(f"Error loading models at startup: {str(e)}")
-        logger.warning("API will start but some endpoints may not work without models")
+        logger.error(f"Error during startup: {str(e)}")
+        logger.warning("API will start but some endpoints may not work")
     
     yield
     
