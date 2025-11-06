@@ -35,7 +35,7 @@ class DataPreprocessor:
         with open(config_path, "r") as file:
             self.config = yaml.safe_load(file)
 
-        if data_raw is not None:
+        if data_raw:
             # Use provided DataFrame
             self.df = data_raw.copy()
         else: 
@@ -46,19 +46,11 @@ class DataPreprocessor:
         self.target_col = self.config["target_column"]
         self.num_cols = self.config["numerical_features"]
         self.cat_cols = self.config["categorical_features"]
-        self.drop_col = self.config["must_drop_columns"]
-        self.features_to_drop = self.config["features_to_drop"]
-        self.derived_features_config = self.config.get("combined_features", [])
+        self.drop_col = self.config["drop_columns"]
 
         # For encoding and scaling
         self.label_encoders = {}
-        self.scaler = StandardScaler()
-        
-        # Store feature engineering parameters
-        self.feature_engineering_params = {}
-        self.numerical_fill_values = {}
-        self.categorical_fill_values = {}
-        self.target_mapping = {}
+        self.scaler = None
 
         # Create folder for processed data & logging
         self.logger = setup_logger(
@@ -66,182 +58,75 @@ class DataPreprocessor:
             self.config["logging"]["log_level"]
         )
 
-    def handle_missing_values(self):
-        """Fill missing values and store fill strategies - MUST BE DONE BEFORE FEATURE ENGINEERING"""
-        self.logger.info("Handling missing values...")
-        
-        # Numerical features
-        for col in self.num_cols:
-            if col in self.df.columns and self.df[col].isnull().any():
-                fill_value = self.df[col].median()
-                self.df[col].fillna(fill_value, inplace=True)
-                self.numerical_fill_values[col] = float(fill_value)
-                self.logger.info(f"Filled missing values in {col} with median: {fill_value}")
-
-        # Categorical features
-        for col in self.cat_cols:
-            if col in self.df.columns and self.df[col].isnull().any():
-                if not self.df[col].mode().empty:
-                    fill_value = self.df[col].mode()[0]
-                else:
-                    fill_value = "Unknown"
-                self.df[col].fillna(fill_value, inplace=True)
-                self.categorical_fill_values[col] = fill_value
-                self.logger.info(f"Filled missing values in {col} with mode: {fill_value}")
-
-        # Handle missing values in potential source columns for derived features
-        
-        for col in self.features_to_drop:
-            if col in self.df.columns and self.df[col].isnull().any():
-                if col in self.num_cols:
-                    fill_value = self.df[col].median()
-                    self.df[col].fillna(fill_value, inplace=True)
-                    if col not in self.numerical_fill_values:
-                        self.numerical_fill_values[col] = float(fill_value)
-                elif col in self.cat_cols:
-                    if not self.df[col].mode().empty:
-                        fill_value = self.df[col].mode()[0]
-                    else:
-                        fill_value = "Unknown"
-                    self.df[col].fillna(fill_value, inplace=True)
-                    if col not in self.categorical_fill_values:
-                        self.categorical_fill_values[col] = fill_value
-
-    def _safe_feature_creation(self, feature_name: str, creation_func, required_cols: list):
-        """Safely create a feature after missing values are handled"""
-        if all(col in self.df.columns for col in required_cols):
-            try:
-                # Check if all required columns have no missing values
-                if self.df[required_cols].isnull().any().any():
-                    missing_cols = self.df[required_cols].columns[self.df[required_cols].isnull().any()].tolist()
-                    self.logger.warning(f"Cannot create {feature_name}: missing values in {missing_cols}")
-                    return None
-                
-                result = creation_func()
-                
-                # Store creation parameters for production use
-                self.feature_engineering_params[feature_name] = {
-                    "required_columns": required_cols,
-                    "operation": "custom",
-                    "created_at": datetime.utcnow().isoformat()
-                }
-                
-                self.logger.info(f"Successfully created feature: {feature_name}")
-                return result
-            except Exception as e:
-                self.logger.warning(f"Failed to create feature {feature_name}: {str(e)}")
-                return None
-        else:
-            missing_cols = [col for col in required_cols if col not in self.df.columns]
-            self.logger.warning(f"Cannot create {feature_name}: missing columns {missing_cols}")
-            return None
+    # Feature Engineering
     def combine_cols(self):
-        """Create derived features AFTER missing values are handled"""
-        self.logger.info("Creating derived features after missing value handling...")
-        
-        created_features = []
-        
-        # Engagement Index - (outcalls + incalls) / (months + 1)
-        eng_result = self._safe_feature_creation(
-            "engagement_index",
-            lambda: (self.df["outcalls"] + self.df["incalls"]) / (self.df["months"] + 1),
-            ["outcalls", "incalls", "months"]
-        )
-        if eng_result is not None:
-            self.df["engagement_index"] = eng_result
-            created_features.append("engagement_index")
+        """Create derived features safely (skip if raw columns missing)"""
+        self.logger.info("Creating derived features...")
 
-        # Model Change Rate - models / (months + 1)
-        model_result = self._safe_feature_creation(
-            "model_change_rate",
-            lambda: self.df["models"] / (self.df["months"] + 1),
-            ["models", "months"]
-        )
-        if model_result is not None:
-            self.df["model_change_rate"] = model_result
-            created_features.append("model_change_rate")
+        def safe_addition(*cols):
+            return sum(self.df[col] if col in self.df.columns else 0 for col in cols)
 
-        # Overage Ratio - overage / (revenue + 1)
-        overage_result = self._safe_feature_creation(
-            "overage_ratio",
-            lambda: self.df["overage"] / (self.df["revenue"] + 1),
-            ["overage", "revenue"]
-        )
-        if overage_result is not None:
-            self.df["overage_ratio"] = overage_result
-            created_features.append("overage_ratio")
+        def safe_divide(numerator, denominator):
+            return numerator / (denominator + 1e-8)  # avoid divide by zero
 
-        # Call Activity Score - mou + mourec + 0.5*(outcalls + incalls + peakvce + opeakvce)
-        call_activity_result = self._safe_feature_creation(
-            "call_activity_score",
-            lambda: (self.df["mou"] + self.df["mourec"] + 
-                    0.5 * (self.df["outcalls"] + self.df["incalls"] + 
-                          self.df["peakvce"] + self.df["opeakvce"])),
-            ["mou", "mourec", "outcalls", "incalls", "peakvce", "opeakvce"]
-        )
-        if call_activity_result is not None:
-            self.df["call_activity_score"] = call_activity_result
-            created_features.append("call_activity_score")
+        df = self.df.copy()
 
-        # Call Quality Issues - dropvce + blckvce + unansvce + dropblk
-        call_quality_result = self._safe_feature_creation(
-            "call_quality_issues",
-            lambda: (self.df["dropvce"] + self.df["blckvce"] + 
-                    self.df["unansvce"] + self.df["dropblk"]),
-            ["dropvce", "blckvce", "unansvce", "dropblk"]
-        )
-        if call_quality_result is not None:
-            self.df["call_quality_issues"] = call_quality_result
-            created_features.append("call_quality_issues")
+        if all(col in df.columns for col in ["outcalls", "incalls", "months"]):
+            df["engagement_index"] = safe_divide(
+                df["outcalls"] + df["incalls"], df["months"])
+        if all(col in df.columns for col in ["models", "months"]):
+            df["model_change_rate"] = safe_divide(df["models"], df["months"])
+        if all(col in df.columns for col in ["overage", "revenue"]):
+            df["overage_ratio"] = safe_divide(df["overage"], df["revenue"])
+        if all(col in df.columns for col in ["mou", "mourec", "outcalls", "incalls", "peakvce", "opeakvce"]):
+            df["call_activity_score"] = df["mou"] + df["mourec"] + 0.5 * \
+                safe_addition("outcalls", "incalls", "peakvce", "opeakvce")
+        if all(col in df.columns for col in ["dropvce", "blckvce", "unansvce", "dropblk"]):
+            df["call_quality_issues"] = safe_addition(
+                "dropvce", "blckvce", "unansvce", "dropblk")
+        if all(col in df.columns for col in ["custcare", "retcalls", "retaccpt"]):
+            df["cust_engagement_score"] = df["custcare"] + \
+                df["retcalls"] + 2 * df["retaccpt"]
+        if all(col in df.columns for col in ["overage", "directas", "recchrge"]):
+            df["overuse_behavior"] = df["overage"] + \
+                0.5 * safe_addition("directas", "recchrge")
+        if all(col in df.columns for col in ["models", "eqpdays", "refurb"]):
+            df["device_tenure_index"] = 0.5 * df["models"] + \
+                (df["eqpdays"] / 100) + df["refurb"]
+        if all(col in df.columns for col in ["age1", "age2", "children", "income"]):
+            df["demographic_index"] = (
+                (df["age1"] + df["age2"]) / 2) + df["children"] * 2 + (df["income"] / 10000)
+        if all(col in df.columns for col in ["credita", "creditaa", "prizmub", "prizmtwn"]):
+            df["socio_tier"] = df["credita"] + 2 * \
+                df["creditaa"] + df["prizmub"] + 0.5 * df["prizmtwn"]
+        if all(col in df.columns for col in ["occprof", "occcler", "occcrft", "occret", "occself"]):
+            df["occupation_class"] = safe_addition(
+                "occprof", "occcler", "occcrft", "occret", "occself")
+        if all(col in df.columns for col in ["ownrent", "marryyes", "pcown", "creditcd", "travel", "truck", "rv"]):
+            df["household_lifestyle_score"] = safe_addition(
+                "ownrent", "marryyes", "pcown", "creditcd", "travel", "truck", "rv")
+        if all(col in df.columns for col in ["changem", "changer", "newcelly", "newcelln", "refer"]):
+            df["churn_change_score"] = safe_addition(
+                "changem", "changer", "newcelly", "newcelln") - 0.5 * df["refer"]
 
-        # Customer Engagement Score - custcare + retcalls + 2*retaccpt
-        cust_engagement_result = self._safe_feature_creation(
-            "cust_engagement_score",
-            lambda: (self.df["custcare"] + self.df["retcalls"] + 
-                    2 * self.df["retaccpt"]),
-            ["custcare", "retcalls", "retaccpt"]
-        )
-        if cust_engagement_result is not None:
-            self.df["cust_engagement_score"] = cust_engagement_result
-            created_features.append("cust_engagement_score")
+        # Only add derived features that were successfully created
+        created_features = [col for col in self.config.get(
+            "combined_features", []) if col in df.columns]
+        self.num_cols += created_features
+        self.logger.info(f"Derived features added: {created_features}")
 
-        # Overuse Behavior - overage + 0.5*(directas + recchrge)
-        overuse_result = self._safe_feature_creation(
-            "overuse_behavior",
-            lambda: (self.df["overage"] + 
-                    0.5 * (self.df["directas"] + self.df["recchrge"])),
-            ["overage", "directas", "recchrge"]
-        )
-        if overuse_result is not None:
-            self.df["overuse_behavior"] = overuse_result
-            created_features.append("overuse_behavior")
+    def handle_missing_values(self):
+        """Fill missing values for numerical and categorical"""
+        self.logger.info("Handling missing values...")
+        for col in self.num_cols:
+            if self.df[col].isnull().any():
+                self.df.fillna({col: self.df[col].median()}, inplace=True)
 
-        # Device Tenure Index - 0.5*models + eqpdays/100 + refurb
-        device_tenure_result = self._safe_feature_creation(
-            "device_tenure_index",
-            lambda: (0.5 * self.df["models"] + 
-                    self.df["eqpdays"] / 100 + self.df["refurb"]),
-            ["models", "eqpdays", "refurb"]
-        )
-        if device_tenure_result is not None:
-            self.df["device_tenure_index"] = device_tenure_result
-            created_features.append("device_tenure_index")
-
-        # Demographic Index - ((age1 + age2)/2) + children*2 + income/10000
-        demographic_result = self._safe_feature_creation(
-            "demographic_index",
-            lambda: ((self.df["age1"] + self.df["age2"]) / 2 + 
-                    self.df["children"] * 2 + self.df["income"] / 10000),
-            ["age1", "age2", "children", "income"]
-        )
-        if demographic_result is not None:
-            self.df["demographic_index"] = demographic_result
-            created_features.append("demographic_index")
-
-        # Update numerical features list with newly created features
-        self.num_cols = list(set(self.num_cols + created_features))
-        self.logger.info(f"Derived features created: {created_features}")
-        
+        for col in self.cat_cols:
+            if self.df[col].isnull().any():
+                fill_value = self.df[col].mode(
+                )[0] if not self.df[col].mode().empty else "Unknown"
+                self.df.fillna({col: fill_value}, inplace=True)
 
     def encode_categorical_variables(self):
         """Encode categorical features"""
@@ -250,51 +135,31 @@ class DataPreprocessor:
             le = LabelEncoder()
             self.df[col] = le.fit_transform(self.df[col].astype(str))
             self.label_encoders[col] = le
-            self.logger.info(f"Encoded categorical variable: {col}")
 
     def encode_target_variable(self):
-        """Encode target variable consistently"""
+        """Encode target"""
         self.logger.info("Encoding target variable...")
-        if self.target_col in self.df.columns:
-            if self.df[self.target_col].dtype == "object":
-                # Create consistent mapping
-                self.target_mapping = {
-                    "True": 1, "False": 0,
-                    "Yes": 1, "No": 0,
-                    "true": 1, "false": 0,
-                    "yes": 1, "no": 0,
-                    "1": 1, "0": 0
-                }
-                self.df[self.target_col] = (
-                    self.df[self.target_col]
-                    .astype(str)
-                    .str.strip()
-                    .map(self.target_mapping)
-                    .fillna(0)
-                    .astype(int)
-                )
-                self.logger.info(f"Encoded target variable {self.target_col}")
-            else:
-                # Ensure it's integer type
-                self.df[self.target_col] = self.df[self.target_col].astype(int)
+        if self.df[self.target_col].dtype == "object":
+            self.df[self.target_col] = self.df[self.target_col].map({
+                "True": 1, "False": 0,
+                "Yes": 1, "No": 0,
+                "true": 1, "false": 0,
+                "yes": 1, "no": 0
+            }).fillna(0).astype(int)
 
     def feature_scaling(self):
-        """Scale numerical features and store scaler"""
+        """Scale numerical features"""
         self.logger.info("Scaling numerical features...")
-        numerical_cols_to_scale = [col for col in self.num_cols if col in self.df.columns]
-        
-        if numerical_cols_to_scale:
-            self.df[numerical_cols_to_scale] = self.scaler.fit_transform(
-                self.df[numerical_cols_to_scale]
-            )
-            self.logger.info(f"Scaled numerical features: {numerical_cols_to_scale}")
+        self.scaler = StandardScaler()
+        self.df[self.num_cols] = self.scaler.fit_transform(
+            self.df[self.num_cols])
 
     def remove_unnecessary_columns(self):
         """Drop unnecessary raw columns, keeping derived features intact"""
         self.logger.info("Dropping unnecessary columns...")
 
         # Start with explicitly configured drop columns
-        cols_to_drop = set(self.drop_col)|set(self.features_to_drop)
+        cols_to_drop = set(self.drop_col)
 
         # Automatically keep all derived features
         derived_features = set(self.config.get("combined_features", []))
@@ -324,9 +189,22 @@ class DataPreprocessor:
         # Local save
         local_path = "data/processed/processed_data.csv"
         self.df.to_csv(local_path, index=False)
+
+        artifacts = {
+            "label_encoders": {col: list(enc.classes_) for col, enc in self.label_encoders.items()},
+            "scaler_params": {
+                "mean": self.scaler.mean_.tolist(),
+                "scale": self.scaler.scale_.tolist()
+            },
+            "feature_names": self.df.columns.tolist(),
+            "preprocessing_timestamp": datetime.utcnow().isoformat()
+        }
+
+        with open("data/processed/preprocessing_artifacts.json", "w") as f:
+            json.dump(artifacts, f, indent=2)
         self.logger.info("Processed data saved locally.")
-        self.logger.info("Saving processed data to PostgreSQL...")
-        self.database_save()
+        # self.logger.info("Saving processed data to PostgreSQL...")
+        # self.database_save()
 
     def database_save(self):
         """Save processed data snapshot to PostgreSQL"""
@@ -343,7 +221,7 @@ class DataPreprocessor:
             engine = create_engine(conn_str)
 
             snapshot_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-            snapshot_table = f"customer_prod_data"
+            snapshot_table = f"processed_snapshot_{snapshot_id}"
             self.df.to_sql(snapshot_table, engine,
                            index=False, if_exists="replace")
 
@@ -364,266 +242,174 @@ class DataPreprocessor:
                 f"Failed to save processed data to PostgreSQL: {e}")
             raise
 
+    # Preprocessing Pipeline
+
     def run_preprocessing_pipeline(self):
-        """Run the full preprocessing flow in correct order"""
+        """Run the full preprocessing flow"""
+
         self.logger.info("Starting full preprocessing pipeline...")
         print("Starting full preprocessing pipeline...")
-        
-        try:
-            # CORRECT ORDER: Handle missing values FIRST
-            self.handle_missing_values()
-            
-            # THEN create derived features using clean data
-            self.combine_cols()
-            
-            # Continue with other preprocessing steps
-            self.encode_categorical_variables()
-            self.encode_target_variable()
-            self.feature_scaling()
-            self.remove_unnecessary_columns()
-            
-            # Validate no NaN values remain
-            if self.df.isnull().any().any():
-                nan_cols = self.df.columns[self.df.isnull().any()].tolist()
-                self.logger.error(f"NaN values detected in columns: {nan_cols}")
-                raise ValueError(f"Data contains NaNs after preprocessing in: {nan_cols}")
-            
-            self.save_preprocessed_data()
-            _ = self.get_feature_names()
-            self.logger.info("Preprocessing pipeline completed successfully.")
-            print("Preprocessing pipeline completed successfully.")
-            return self.df
-            
-        except Exception as e:
-            self.logger.error(f"Preprocessing pipeline failed: {str(e)}")
-            raise
+        self.combine_cols()
+        self.handle_missing_values()
+        self.encode_categorical_variables()
+        self.encode_target_variable()
+        self.feature_scaling()
+        self.remove_unnecessary_columns()
+        self.save_preprocessed_data()
 
-    def get_feature_names(self) -> list[str]:
-        """Return the expected feature names for model input"""
-        self.columns = self.df.columns
-        return [col for col in self.columns if col != self.target_col]
+        if self.df.isnull().any().any():
+            self.logger.error("NaN values detected after preprocessing!")
+            raise ValueError(
+                "Data contains NaNs after preprocessing pipeline.")
 
-
-
-class ProductionPreprocessor(DataPreprocessor):
+        self.logger.info("Preprocessing pipeline completed successfully.")
+        print("Preprocessing pipeline completed successfully.")
+        return self.df
+class ProductionPreprocessor:
     """
-    Inference-time preprocessor that inherits from DataPreprocessor
-    and loads artifacts to replicate training transformations
+    Inference-time preprocessor that loads saved artifacts
+    and applies the same transformations as training.
     """
     
     def __init__(self, artifacts_path: str = "src/data_pipeline/preprocessing_artifacts.json"):
-        """Initialize from saved artifacts instead of config and raw data"""
-        self.artifacts_path = artifacts_path
+        """Load preprocessing artifacts from training"""
+        self.logger = logging.getLogger(__name__)
         
         if not os.path.exists(artifacts_path):
             raise FileNotFoundError(f"Artifacts file not found: {artifacts_path}")
         
-        # Load artifacts
         with open(artifacts_path, "r") as f:
             self.artifacts = json.load(f)
         
-        # Initialize parent without config and data (we'll set everything from artifacts)
-        self._initialize_from_artifacts()
+        # Reconstruct label encoders
+        self.label_encoders = self.artifacts.get("label_encoders", {})
         
-        self.logger = logging.getLogger(__name__)
-        self.logger.info(f"Production preprocessor initialized from {artifacts_path}")
-
-    def _initialize_from_artifacts(self):
-        """Initialize all attributes from saved artifacts"""
-        # Load basic configuration from artifacts
+        # Reconstruct scaler
+        self.scaler = StandardScaler()
+        scaler_params = self.artifacts.get("scaler_params", {})
+        self.scaler.mean_ = np.array(scaler_params.get("mean", []))
+        self.scaler.scale_ = np.array(scaler_params.get("scale", []))
+        
+        # Feature metadata
         self.feature_names = self.artifacts.get("feature_names", [])
         self.num_cols = self.artifacts.get("numerical_features", [])
         self.cat_cols = self.artifacts.get("categorical_features", [])
         self.target_col = self.artifacts.get("target_column", "churn")
-        self.drop_col = self.artifacts.get("drop_columns", [])
+        self.drop_cols = self.artifacts.get("drop_columns", [])
         
-        # Load transformation parameters
-        self.feature_engineering_params = self.artifacts.get("feature_engineering_params", {})
-        self.numerical_fill_values = self.artifacts.get("numerical_fill_values", {})
-        self.categorical_fill_values = self.artifacts.get("categorical_fill_values", {})
-        self.target_mapping = self.artifacts.get("target_mapping", {})
+        # Missing value fill strategies
+        self.num_fill_values = self.artifacts.get("numerical_fill_values", {})
+        self.cat_fill_values = self.artifacts.get("categorical_fill_values", {})
         
-        # Reconstruct transformation objects
-        self.label_encoders = self._reconstruct_label_encoders()
-        self.scaler = self._reconstruct_scaler()
-        
-        # Initialize empty dataframe (will be set during preprocessing)
-        self.df = None
-
-    def _reconstruct_label_encoders(self):
-        """Reconstruct LabelEncoder objects from stored classes"""
-        encoders = {}
-        label_encoders_data = self.artifacts.get("label_encoders", {})
-        
-        for col, classes in label_encoders_data.items():
-            le = LabelEncoder()
-            le.classes_ = np.array(classes)
-            encoders[col] = le
-            
-        return encoders
-
-    def _reconstruct_scaler(self):
-        """Reconstruct StandardScaler from stored parameters"""
-        scaler = StandardScaler()
-        scaler_params = self.artifacts.get("scaler_params", {})
-        
-        if scaler_params:
-            scaler.mean_ = np.array(scaler_params.get("mean", []))
-            scaler.scale_ = np.array(scaler_params.get("scale", []))
-            scaler.var_ = np.array(scaler_params.get("var", []))
-            scaler.n_samples_seen_ = scaler_params.get("n_samples_seen", 0)
-            
-        return scaler
-
+        self.logger.info(f"Loaded preprocessing artifacts from {artifacts_path}")
+    
     def preprocess(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        Apply the exact same preprocessing pipeline used in training
-        Inherits the same method structure but uses stored parameters
-        """
-        self.df = data.copy()
-        
-        try:
-            # Step 1: Handle missing values FIRST (using training statistics)
-            self._handle_missing_values_production()
-            
-            # Step 2: Create derived features AFTER missing values are handled
-            self._combine_cols_production()
-            
-            # Step 3: Encode categorical variables (using training encoders)
-            self._encode_categorical_variables_production()
-            
-            # Step 4: Scale numerical features (using training scaler)
-            self._feature_scaling_production()
-            
-            # Step 5: Align features with training schema
-            self.df = self._align_features(self.df)
-            
-            self.logger.info("Production preprocessing completed successfully.")
-            return self.df
-            
-        except Exception as e:
-            self.logger.error(f"Production preprocessing failed: {str(e)}")
-            raise
+        Applying the same preprocessing pipeline used in training.
 
-    def _handle_missing_values_production(self):
-        """Fill missing values using training statistics - FIRST STEP"""
-        self.logger.info("Handling missing values in production...")
+        """
+        df = data.copy()
         
+        df = self._create_derived_features(df)
+        
+        df = self._remove_columns(df)
+        
+        df = self._handle_missing_values(df)
+        
+        df = self._encode_categorical(df)
+        
+        if self.target_col in df.columns:
+            df = self._encode_target(df)
+        
+        df = self._scale_features(df)
+        
+        df = self._align_features(df)
+        
+        return df
+    
+    def _create_derived_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Create the same derived features as training"""
+        if "outcalls" in df.columns and "incalls" in df.columns:
+            df["engagement_index"] = (
+                df["outcalls"] + df["incalls"]) / (df["months"] + 1)
+        
+        if "models" in df.columns and "months" in df.columns:
+            df["model_change_rate"] = df["models"] / (df["months"] + 1)
+        
+        if "overage" in df.columns and "revenue" in df.columns:
+            df["overage_ratio"] = df["overage"] / (df["revenue"] + 1)
+        
+        return df
+    
+    def _remove_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Drop columns that were dropped during training"""
+        cols_to_drop = [col for col in self.drop_cols if col in df.columns]
+        if cols_to_drop:
+            df = df.drop(columns=cols_to_drop)
+        return df
+    
+    def _handle_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Fill missing values using training statistics"""
         # Numerical features
-        for col, fill_value in self.numerical_fill_values.items():
-            if col in self.df.columns and self.df[col].isnull().any():
-                self.df[col].fillna(fill_value, inplace=True)
+        for col in self.num_cols:
+            if col in df.columns and df[col].isnull().any():
+                fill_value = self.num_fill_values.get(col, df[col].median())
+                df[col].fillna(fill_value, inplace=True)
         
         # Categorical features
-        for col, fill_value in self.categorical_fill_values.items():
-            if col in self.df.columns and self.df[col].isnull().any():
-                self.df[col].fillna(fill_value, inplace=True)
-        
-        # Handle potential source columns for derived features
-        potential_derived_source_cols = self.artifacts.get("potential_derived_source_cols", [])
-        
-        for col in potential_derived_source_cols:
-            if col in self.df.columns and self.df[col].isnull().any():
-                if col in self.numerical_fill_values:
-                    self.df[col].fillna(self.numerical_fill_values[col], inplace=True)
-                elif col in self.categorical_fill_values:
-                    self.df[col].fillna(self.categorical_fill_values[col], inplace=True)
-                else:
-                    # Fallback: use median for numerical, mode for categorical
-                    if self.df[col].dtype in ['int64', 'float64']:
-                        self.df[col].fillna(self.df[col].median(), inplace=True)
-                    else:
-                        if not self.df[col].mode().empty:
-                            self.df[col].fillna(self.df[col].mode()[0], inplace=True)
-                        else:
-                            self.df[col].fillna("Unknown", inplace=True)
-
-    def _combine_cols_production(self):
-        """Create derived features AFTER missing values are handled"""
-        self.logger.info("Creating derived features in production...")
-        
-        feature_operations = {
-            "engagement_index": lambda: (self.df["outcalls"] + self.df["incalls"]) / (self.df["months"] + 1),
-            "model_change_rate": lambda: self.df["models"] / (self.df["months"] + 1),
-            "overage_ratio": lambda: self.df["overage"] / (self.df["revenue"] + 1),
-            "call_activity_score": lambda: (self.df["mou"] + self.df["mourec"] + 
-                                          0.5 * (self.df["outcalls"] + self.df["incalls"] + 
-                                                self.df["peakvce"] + self.df["opeakvce"])),
-            "call_quality_issues": lambda: (self.df["dropvce"] + self.df["blckvce"] + 
-                                          self.df["unansvce"] + self.df["dropblk"]),
-            "cust_engagement_score": lambda: (self.df["custcare"] + self.df["retcalls"] + 
-                                            2 * self.df["retaccpt"]),
-            "overuse_behavior": lambda: (self.df["overage"] + 
-                                       0.5 * (self.df["directas"] + self.df["recchrge"])),
-            "device_tenure_index": lambda: (0.5 * self.df["models"] + 
-                                          self.df["eqpdays"] / 100 + self.df["refurb"]),
-            "demographic_index": lambda: ((self.df["age1"] + self.df["age2"]) / 2 + 
-                                        self.df["children"] * 2 + self.df["income"] / 10000)
-        }
-        
-        for feature_name, operation in feature_operations.items():
-            if feature_name in self.feature_engineering_params:
-                required_cols = self.feature_engineering_params[feature_name].get("required_columns", [])
-                if all(col in self.df.columns for col in required_cols):
-                    try:
-                        # Ensure no missing values in required columns
-                        if self.df[required_cols].isnull().any().any():
-                            self.logger.warning(f"Skipping {feature_name}: missing values in source columns")
-                            continue
-                            
-                        self.df[feature_name] = operation()
-                        self.logger.info(f"Created derived feature: {feature_name}")
-                    except Exception as e:
-                        self.logger.warning(f"Failed to create {feature_name}: {str(e)}")
-                        self.df[feature_name] = 0  # Default value
-                else:
-                    missing_cols = [col for col in required_cols if col not in self.df.columns]
-                    self.logger.warning(f"Cannot create {feature_name}: missing {missing_cols}")
-                    self.df[feature_name] = 0  # Default value
-
-    def _encode_categorical_variables_production(self):
-        """Encode categorical features using training encoders"""
-        self.logger.info("Encoding categorical variables in production...")
         for col in self.cat_cols:
-            if col in self.df.columns and col in self.label_encoders:
-                le = self.label_encoders[col]
-                
-                # Convert to string and handle unseen categories
-                self.df[col] = self.df[col].astype(str)
-                
-                # Create mapping for known classes
-                encoding_map = {cls: idx for idx, cls in enumerate(le.classes_)}
-                
-                # Map values, assign -1 for unseen categories
-                self.df[col] = self.df[col].map(encoding_map)
-                
-                # Handle unseen categories
-                unseen_mask = self.df[col].isna()
-                if unseen_mask.any():
-                    self.logger.warning(f"Unseen categories in '{col}'. Encoding as -1.")
-                    self.df.loc[unseen_mask, col] = -1
-                
-                self.df[col] = self.df[col].astype(int)
-
-    def _feature_scaling_production(self):
-        """Scale numerical features using training scaler"""
-        self.logger.info("Scaling numerical features in production...")
-        cols_to_scale = [col for col in self.num_cols if col in self.df.columns]
+            if col in df.columns and df[col].isnull().any():
+                fill_value = self.cat_fill_values.get(col, "Unknown")
+                df[col].fillna(fill_value, inplace=True)
         
-        if cols_to_scale and hasattr(self.scaler, 'mean_') and len(self.scaler.mean_) > 0:
-            try:
-                self.df[cols_to_scale] = self.scaler.transform(self.df[cols_to_scale])
-            except ValueError as e:
-                self.logger.error(f"Scaling failed: {str(e)}")
-                # Fallback: use standard scaling with available parameters
-                for col in cols_to_scale:
-                    if col in self.scaler.mean_:
-                        idx = list(self.scaler.mean_).index(col)
-                        self.df[col] = (self.df[col] - self.scaler.mean_[idx]) / self.scaler.scale_[idx]
-
+        return df
+    
+    def _encode_categorical(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Encode categorical features using training encoders"""
+        for col in self.cat_cols:
+            if col in df.columns:
+                # Get the classes from training
+                classes = self.label_encoders.get(col, [])
+                
+                # Convert to string
+                df[col] = df[col].astype(str)
+                
+                # Map to encoded values, handle unseen categories
+                encoding_map = {cls: idx for idx, cls in enumerate(classes)}
+                df[col] = df[col].map(encoding_map).fillna(-1).astype(int)
+                
+                # Log warning for unseen categories
+                if (df[col] == -1).any():
+                    self.logger.warning(
+                        f"Unseen categories in column '{col}'. Encoded as -1."
+                    )
+        
+        return df
+    
+    def _encode_target(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Encode target variable if present"""
+        if self.target_col in df.columns and df[self.target_col].dtype == "object":
+            df[self.target_col] = df[self.target_col].map({
+                "True": 1, "False": 0,
+                "Yes": 1, "No": 0,
+                "true": 1, "false": 0,
+                "yes": 1, "no": 0
+            }).fillna(0).astype(int)
+        
+        return df
+    
+    def _scale_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Scale numerical features using training scaler"""
+        cols_to_scale = [col for col in self.num_cols if col in df.columns]
+        
+        if cols_to_scale and len(self.scaler.mean_) > 0:
+            df[cols_to_scale] = self.scaler.transform(df[cols_to_scale])
+        
+        return df
+    
     def _align_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Ensure features match training feature order and presence"""
-        # Remove target column for inference
+        # Remove target column if present (for inference)
         expected_features = [f for f in self.feature_names if f != self.target_col]
         
         # Add missing features with zeros
@@ -636,37 +422,27 @@ class ProductionPreprocessor(DataPreprocessor):
         df = df[expected_features]
         
         return df
-
-    # Override parent methods that shouldn't be used in production
-    def run_preprocessing_pipeline(self):
-        raise NotImplementedError("Use preprocess() method for production inference")
     
-    def handle_missing_values(self):
-        raise NotImplementedError("Use _handle_missing_values_production() for production inference")
-    
-    def combine_cols(self):
-        raise NotImplementedError("Use _combine_cols_production() for production inference")
-    
-    def encode_categorical_variables(self):
-        raise NotImplementedError("Use _encode_categorical_variables_production() for production inference")
-    
-    def feature_scaling(self):
-        raise NotImplementedError("Use _feature_scaling_production() for production inference")
+    def get_feature_names(self) -> list[str]:
+        """Return the expected feature names for model input"""
+        return [f for f in self.feature_names if f != self.target_col]
 
 
 def save_enhanced_preprocessing_artifacts(preprocessor_instance):
     """
-    Enhanced artifact saving with complete reproduction capability
+    Enhanced artifact saving function to be called after preprocessing.
+    Add this to your DataPreprocessor class or call it after run_preprocessing_pipeline.
     """
+    
     def convert_numpy_types(obj):
         """Convert numpy types to native Python types for JSON serialization"""
         if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
             return int(obj)
         elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
             return float(obj)
-        elif isinstance(obj, np.ndarray):
+        elif isinstance(obj, (np.ndarray,)):
             return obj.tolist()
-        elif isinstance(obj, np.bool_):
+        elif isinstance(obj, (np.bool_)):
             return bool(obj)
         elif isinstance(obj, dict):
             return {key: convert_numpy_types(value) for key, value in obj.items()}
@@ -674,58 +450,55 @@ def save_enhanced_preprocessing_artifacts(preprocessor_instance):
             return [convert_numpy_types(item) for item in obj]
         else:
             return obj
-
-    # Store complete preprocessing state
+    
+    # Calculate fill values for missing data
+    num_fill_values = {}
+    for col in preprocessor_instance.num_cols:
+        if col in preprocessor_instance.df.columns:
+            num_fill_values[col] = float(preprocessor_instance.df[col].median())
+    
+    cat_fill_values = {}
+    for col in preprocessor_instance.cat_cols:
+        if col in preprocessor_instance.df.columns:
+            mode_val = preprocessor_instance.df[col].mode()
+            cat_fill_values[col] = mode_val[0] if not mode_val.empty else "Unknown"
+    
     artifacts = {
-        # Feature lists and configuration
-        "potential_derived_source_cols":preprocessor_instance.features_to_drop,
+        "label_encoders": {
+            col: list(enc.classes_) 
+            for col, enc in preprocessor_instance.label_encoders.items()
+        },
+        
+        "scaler_params": {
+            "mean": preprocessor_instance.scaler.mean_.tolist(),
+            "scale": preprocessor_instance.scaler.scale_.tolist()
+        },
+        
         "feature_names": preprocessor_instance.df.columns.tolist(),
         "numerical_features": preprocessor_instance.num_cols,
         "categorical_features": preprocessor_instance.cat_cols,
         "target_column": preprocessor_instance.target_col,
         "drop_columns": preprocessor_instance.drop_col,
         
-        # Transformation objects
-        "label_encoders": {
-            col: enc.classes_.tolist() 
-            for col, enc in preprocessor_instance.label_encoders.items()
-        },
+        "numerical_fill_values": num_fill_values,
+        "categorical_fill_values": cat_fill_values,
         
-        "scaler_params": {
-            "mean": preprocessor_instance.scaler.mean_.tolist(),
-            "scale": preprocessor_instance.scaler.scale_.tolist(),
-            "var": preprocessor_instance.scaler.var_.tolist(),
-            "n_samples_seen": int(preprocessor_instance.scaler.n_samples_seen_)
-        },
-        
-        # Feature engineering parameters
-        "feature_engineering_params": preprocessor_instance.feature_engineering_params,
-        
-        # Missing value handling
-        "numerical_fill_values": preprocessor_instance.numerical_fill_values,
-        "categorical_fill_values": preprocessor_instance.categorical_fill_values,
-        
-        # Target encoding
-        "target_mapping": getattr(preprocessor_instance, 'target_mapping', {}),
-        
-        # Metadata
         "preprocessing_timestamp": datetime.utcnow().isoformat(),
         "n_samples": len(preprocessor_instance.df),
-        "n_features": len(preprocessor_instance.df.columns),
-        "feature_dtypes": {col: str(dtype) for col, dtype in preprocessor_instance.df.dtypes.items()}
+        "n_features": len(preprocessor_instance.df.columns)
     }
     
     # Convert all numpy types to native Python types
     artifacts = convert_numpy_types(artifacts)
     
-    # Save artifacts as JSON
+    # Save artifacts
     artifacts_path = "src/data_pipeline/preprocessing_artifacts.json"
     os.makedirs(os.path.dirname(artifacts_path), exist_ok=True)
     
     with open(artifacts_path, "w") as f:
-        json.dump(artifacts, f, indent=2, default=str)
+        json.dump(artifacts, f, indent=2, default=str)  # Added default=str as extra safety
     
-    # Save pickle backup for complex objects
+    # Also save a pickle backup for complex objects if needed
     pickle_path = "src/data_pipeline/preprocessing_artifacts.pkl"
     with open(pickle_path, "wb") as f:
         pickle.dump({

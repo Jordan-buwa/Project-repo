@@ -10,7 +10,7 @@ output_path: "data/processed/preprocessed.csv"
 target_column: "churn"
 
 # Columns to drop during preprocessing
-must_drop_columns:
+drop_columns:
   - "Unnamed: 0"
   - "X"
   - "customer"

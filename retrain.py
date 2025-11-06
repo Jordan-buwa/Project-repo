@@ -19,9 +19,9 @@ project_root = Path(__file__).parent
 sys.path.append(str(project_root))
 
 from src.data_pipeline.pipeline_data import fetch_preprocessed
-from src.models.train_nn import NeuralNetworkTrainer
-from src.models.train_xgb import XGBoostTrainer, setup_logger as xgb_logger
-from src.models.train_rf import evaluate_models as rf_evaluate
+from src.models.churn_nn import NeuralNetworkTrainer
+from src.models.train_xgboost import XGBoostTrainer, setup_logger as xgb_logger
+from src.models.train_RandomForest import evaluate_models as rf_evaluate
 import torch
 
 class ModelRetrainer:
@@ -160,7 +160,7 @@ class ModelRetrainer:
                 rf_config = yaml.safe_load(f)
             
             # Use the existing evaluate_models function
-            _, best_model, best_metrics, _ = rf_evaluate(X, y, rf_config)
+            best_model_name, best_model, best_metrics, run_id = rf_evaluate(X, y, rf_config)
             
             if best_model:
                 # Save model locally

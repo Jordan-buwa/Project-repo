@@ -1,5 +1,6 @@
 [core]
     remote = azureblob
+    autostage = true
 ['remote "azureblob"']
     url = azure://dvc-remote/churn_data
     connection_timeout = 300
