@@ -13,15 +13,12 @@ from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, classification_report
 from imblearn.combine import SMOTETomek
 import mlflow
-import traceback
 import mlflow.xgboost
-import numpy as np
 from mlflow.models import infer_signature
 import json
 from pathlib import Path
-from dotenv import load_dotenv
 sys.path.append(str(Path(__file__).parent.parent))
-load_dotenv()
+
 [warnings.filterwarnings("ignore", category=c)
  for c in (UserWarning, FutureWarning)]
 os.environ["MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING"] = "true"
@@ -38,17 +35,7 @@ def setup_logger(log_path: str, log_level: str = "INFO"):
         level=getattr(logging, log_level.upper(), logging.INFO),
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
-    
-    # Also add console handler for immediate feedback
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(getattr(logging, log_level.upper(), logging.INFO))
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    console_handler.setFormatter(formatter)
-    
-    logger = logging.getLogger(__name__)
-    logger.addHandler(console_handler)
-    
-    return logger
+    return logging.getLogger(__name__)
 
 
 class XGBoostTrainer:
@@ -67,33 +54,6 @@ class XGBoostTrainer:
                 best_f1 = score
                 best_thresh = t
         return best_thresh, best_f1
-    def _validate_data(self, X, y):
-        """Validate input data before training"""
-        self.logger.info("Validating input data...")
-        
-        # Check for NaN values
-        if X.isnull().any().any():
-            nan_cols = X.columns[X.isnull().any()].tolist()
-            self.logger.error(f"NaN values found in features: {nan_cols}")
-            raise ValueError(f"Data contains NaN values in columns: {nan_cols}")
-        
-        if y.isnull().any():
-            self.logger.error("NaN values found in target variable")
-            raise ValueError("Target variable contains NaN values")
-        
-        # Check data types
-        if not all(X.dtypes.apply(lambda x: np.issubdtype(x, np.number))):
-            non_numeric_cols = X.columns[~X.dtypes.apply(lambda x: np.issubdtype(x, np.number))].tolist()
-            self.logger.error(f"Non-numeric columns found: {non_numeric_cols}")
-            raise ValueError(f"Non-numeric columns: {non_numeric_cols}")
-        
-        # Check target distribution
-        target_distribution = y.value_counts()
-        self.logger.info(f"Target distribution:\n{target_distribution}")
-        
-        if len(target_distribution) < 2:
-            self.logger.error("Target variable has only one class")
-            raise ValueError("Target variable must have at least two classes")
 
     def train_and_tune_model(self, X, y):
         self.logger.info("Starting model training with Stratified K-Fold...")
@@ -114,17 +74,11 @@ class XGBoostTrainer:
         except Exception:
             dvc_hash = "N/A"
 
+        # MLflow setup
         mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "file:./mlruns")
         mlflow.set_tracking_uri(mlflow_uri)
-
-        experiment_name = "XGBoost_Churn_Experiment"
-        try:
-            experiment = mlflow.get_experiment_by_name(experiment_name)
-            if experiment is None:
-                mlflow.create_experiment(experiment_name)
-            mlflow.set_experiment(experiment_name)
-        except Exception as e:
-            self.logger.warning(f"Could not set up MLflow experiment: {e}")
+        mlflow.set_experiment("XGBoost_Churn_Experiment")
+        self.logger.info(f"MLflow tracking URI: {mlflow_uri}")
 
         y_true_global = []
         y_pred_global = []
@@ -146,33 +100,22 @@ class XGBoostTrainer:
                     self.logger.info(
                         f"Fold {fold}: Training size after SMOTETomek: {X_train.shape[0]}")
 
-                try:
-                    xgb = XGBClassifier(
-                        objective='binary:logistic',
-                        eval_metric='logloss',
-                        random_state=self.config["random_state"],
-                        n_jobs=-1  # Use all available cores
-                    )
+                xgb = XGBClassifier(
+                    objective='binary:logistic',
+                    eval_metric='logloss',
+                    random_state=self.config["random_state"]
+                )
 
-                    tuner = RandomizedSearchCV(
-                        estimator=xgb,
-                        param_distributions=param_grid,
-                        scoring='f1',
-                        n_iter=self.config.get("n_iter", 10),
-                        cv=3,
-                        n_jobs=-1,
-                        random_state=self.config["random_state"],
-                        verbose=1  # Add progress output
-                    )
-                    
-                    self.logger.info(f"Starting hyperparameter tuning for fold {fold}...")
-                    tuner.fit(X_train, y_train)
-                    
-                except Exception as e:
-                    self.logger.error(f"Fold {fold} failed: {e}")
-                    self.logger.error(traceback.format_exc())
-
-                    continue  # Skip this fold and continue with others
+                tuner = RandomizedSearchCV(
+                    estimator=xgb,
+                    param_distributions=param_grid,
+                    scoring='f1',
+                    n_iter=10,
+                    cv=3,
+                    n_jobs=-1,
+                    random_state=self.config["random_state"]
+                )
+                tuner.fit(X_train, y_train)
                 best_model = tuner.best_estimator_
 
                 y_probs = best_model.predict_proba(X_val)[:, 1]
@@ -241,14 +184,10 @@ class XGBoostTrainer:
 
             #  Train Final Model
             if self.config.get("apply_smotetomek", True):
-                try:
-                    smt = SMOTETomek(random_state=self.config["random_state"])
-                    X_train, y_train = smt.fit_resample(X_train, y_train)
-                    self.logger.info(f"Fold {fold}: Training size after SMOTETomek: {X_train.shape[0]}")
-                except Exception as e:
-                    self.logger.error(f"SMOTETomek failed in fold {fold}: {e}")
-                    # Continue without resampling
-                    self.logger.info("Continuing without SMOTETomek resampling")
+                smt = SMOTETomek(random_state=self.config["random_state"])
+                X, y = smt.fit_resample(X, y)
+                self.logger.info(
+                    f"Full dataset size after SMOTETomek: {X.shape[0]}")
 
             final_model = XGBClassifier(
                 objective='binary:logistic',
@@ -341,19 +280,8 @@ if __name__ == "__main__":
 
     df_processed = fetch_preprocessed()
     target_col = config["target_column"]
-    logger.info(f"Target column: {target_col}")
-
-    # Check if target column exists
-    if target_col not in df_processed.columns:
-        available_cols = df_processed.columns.tolist()
-        logger.error(f"Target column '{target_col}' not found. Available columns: {available_cols}")
-        raise ValueError(f"Target column '{target_col}' not found in data")
-
     X = df_processed.drop(columns=[target_col])
     y = df_processed[target_col]
-
-    logger.info(f"Features shape: {X.shape}")
-    logger.info(f"Target distribution:\n{y.value_counts()}")
 
     trainer = XGBoostTrainer(config=config, logger=logger)
     best_model, fold_metrics = trainer.train_and_tune_model(X, y)

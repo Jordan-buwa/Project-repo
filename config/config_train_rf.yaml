@@ -5,51 +5,49 @@ logging:
 
 data:
   target_column: "churn"
-  source: "postgres"  # postgres or local
-  local_path: "data/processed/processed_data.csv"
-  experiment_tracking: true
 
 model_selection:
   model_choice:
     - "random_forest"
-  enable: true
-  primary_metric: "roc_auc"
+  primary_metric: "f1"
   performance_threshold:
     accuracy: 0.7
-    roc_auc: 0.75
-  mlflow_tracking_uri: "mlruns/"
+    f1_score: 0.65
+  threshold_search:
+    start: 0.01
+    end: 0.99
+    step: 0.01
 
 hyperparameters:
   random_forest:
-    n_estimators: [50, 100]           
-    max_depth: [5, 10]               
-    max_features: ["sqrt"]            
-    min_samples_split: [2, 5]      
-    min_samples_leaf: [1, 2]          
+    n_estimators: [200, 250]
+    max_depth: [5, null]
+    max_features: ["sqrt", "log2", null]
+    min_samples_split: [2, 5]
+    min_samples_leaf: [1, 2]
+
+  # xgboost_params:
+
+
+  # Neural network 
+
 cv:
-  n_splits: 3                         
+  n_splits: 4
   scoring: "roc_auc"
-  n_jobs: -1                          
+  n_jobs: -1
   verbose: 1
 
 resampling:
-  apply_smotetomek: true  
-
-experiment_name: "Random forest for Churn Model"
+  apply_smotetomek: true
 
 mlflow:
-  registered_model_name: "customer_churn_model"
+  registered_model_name: "${REGISTERED_MODEL_NAME}"
+  tracking_uri: "${MLFLOW_TRACKING_URI}"
+  experiment_name: "${MLFLOW_EXPERIMENT_NAME}"
+  default_artifact_root: "${MLFLOW_DEFAULT_ARTIFACT_ROOT}"
 
 model:
   random_state: 42
-  test_size: 0.2 
-  validation_size: 0.1         
-  max_depth: null           
-  n_estimators: 100          
-  min_samples_split: 2
-  min_samples_leaf: 1
-  max_features: "sqrt"       
-  bootstrap: true
 
 output:
-  model_dir: "models"
+  model_dir: "${MODEL_DIR}"
