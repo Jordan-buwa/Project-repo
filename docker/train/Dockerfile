@@ -39,5 +39,5 @@ ENV MLFLOW_EXPERIMENT_NAME=Churn_Training
 # Expose MLflow UI port
 EXPOSE 5000
 
-# Run neural_net training script
-CMD ["python", "src/models/train_xgb.py"]
+# Run training script
+CMD ["python3", "src/models/train_xgb.py"]\

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Health Check{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">API Health Status</h1>
+
+<div class="card">
+    <div class="card-body">
+        <p><strong>Status:</strong> {{ data.status }}</p>
+        <p><strong>Models Loaded:</strong> {{ data.models_loaded }}</p>
+        <p><strong>Environment:</strong> {{ data.environment }}</p>
+        <p><strong>Storage Account:</strong> {{ data.storage_account }}</p>
+        <p><strong>Version:</strong> {{ data.version }}</p>
+
+        <h3 class="mt-4">Model Details</h3>
+        <table class="table table-sm table-striped">
+            <thead class="table-light">
+                <tr><th>Model</th><th>Loaded</th><th>Path / Info</th></tr>
+            </thead>
+            <tbody>
+                {% for name, info in data.models.items() %}
+                <tr>
+                    <td>{{ name }}</td>
+                    <td>{{ info.loaded }}</td>
+                    <td><pre class="mb-0">{{ info.metadata | tojson(indent=2) }}</pre></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

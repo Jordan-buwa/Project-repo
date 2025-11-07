@@ -263,7 +263,10 @@ class ModelRetrainer:
         try:
             # Step 1: Fetch and validate data
             self.logger.info("Fetching preprocessed data...")
-            df_processed = fetch_preprocessed()
+            
+            if os.path.exists("data/processed/processed_data.csv"):
+                df_processed = pd.read_csv("data/processed/processed_data.csv")
+            else: df_processed = fetch_preprocessed()
             
             if not self.validate_data_quality(df_processed):
                 self.logger.warning("Data quality issues detected, but continuing...")

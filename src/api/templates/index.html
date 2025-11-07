@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <h1 class="card-title">Welcome to Churn Prediction API</h1>
+        <p>Use the navigation bar to interact with the endpoints.</p>
+        <p><strong>Version:</strong> 1.0.0 |
+           <strong>Environment:</strong> {{ request.app.state.environment }}</p>
+    </div>
+</div>
+{% endblock %}

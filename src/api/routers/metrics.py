@@ -4,7 +4,7 @@ import joblib
 import json
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-from src.api.utils.config import APIConfig, get_allowed_model_types
+from src.api.utils.config import APIConfig, get_allowed_model_types, get_model_path
 from src.api.utils.response_models import MetricsResponse, TestDataset
 from src.api.utils.error_handlers import (
     ModelNotFoundError, DataNotFoundError,
@@ -21,7 +21,7 @@ config = APIConfig()
 def get_latest_model(model_type: str):
     """Get the latest model path using centralized configuration."""
     try:
-        model_path = config.get_model_path(model_type)
+        model_path = get_model_path(model_type)
         raise_if_model_not_found(model_path, model_type)
         return model_path
     except Exception as e:
