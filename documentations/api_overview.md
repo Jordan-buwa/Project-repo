@@ -16,6 +16,8 @@ The system allows:
 - Accessing **model metrics and performance reports**
 - Managing **versioned model files** in the `/models` directory
 
+The API is designed for **scalability, modularity, and reproducibility**, allowing multiple models to coexist with independent versions.
+
 ---
 
 ## API Architecture
@@ -23,7 +25,7 @@ The system allows:
 The system follows a modular structure:
 
 
-Each API module defines endpoints under its respective router (e.g., `/train`, `/predict`, `/metrics`).
+Each API module defines endpoints under its respective router (e.g., `/train`, `/predict`, `/metrics`, `/validation`).
 
 ---
 
@@ -31,24 +33,28 @@ Each API module defines endpoints under its respective router (e.g., `/train`, `
 
 All endpoints are accessible via: http://127.0.0.1:8000/
 
+
+---
+
 ## Core Endpoints
 
 | Category | Endpoint | Method | Description |
-|-----------|-----------|--------|--------------|
+|-----------|-----------|--------|-------------|
 | **Train API** | `/train/{model_type}` | `POST` | Trigger training for a specific model |
-|  | `/train` | `POST` | Train multiple models or with config |
+|  | `/train` | `POST` | Train multiple models or using a config file |
 |  | `/train/status/{job_id}` | `GET` | Retrieve job status |
-| **Predict API** | `/predict/{model_type}` | `POST` | Predict using a trained model |
+| **Predict API** | `/predict/{model_type}` | `POST` | Make predictions using a trained model |
 |  | `/predict/latest/{model_type}` | `GET` | Get latest model info |
 | **Metrics API** | `/metrics/{model_type}` | `GET` | Retrieve model metrics |
 |  | `/metrics/all` | `GET` | Compare metrics for all models |
+| **Data Validation API** | `/data_validation/validate` | `POST` | Validate dataset schema against model schema |
 
 ---
 
 ## Supported Model Types
 
 | Model Type | File Extension | Framework | Location |
-|-------------|----------------|------------|-----------|
+|-------------|----------------|-----------|-----------|
 | `xgboost` | `.joblib` | XGBoost | `models/xgboost_final_model.joblib` |
 | `random-forest` | `.joblib` | Scikit-learn | `models/random_forest_final_model.joblib` |
 | `neural-net` | `.pth` | PyTorch | `models/neural_net_final_model.pth` |
@@ -57,7 +63,7 @@ All endpoints are accessible via: http://127.0.0.1:8000/
 
 ## Common Response Format
 
-All endpoints follow a unified response structure:
+All endpoints return a unified JSON structure:
 
 ```json
 {
@@ -69,7 +75,9 @@ All endpoints follow a unified response structure:
   }
 }
 ```
-### If an error occurs:
+
+
+### Error Responses
 ```json
 {
   "status": "error",
@@ -89,10 +97,11 @@ cURL / HTTPie / Postman
 ```bash
 curl -X GET "http://127.0.0.1:8000/metrics/all"
 ```
-## Related Documentation
 | Document                           | Description                    |
 | ---------------------------------- | ------------------------------ |
 | [train_api.md](./train_API.md)     | Model training endpoints       |
 | [predict_api.md](./predict_API.md) | Model inference endpoints      |
 | [metrics_api.md](./metrics_API.md) | Metrics and evaluation         |
 | [examples.md](./examples.md)       | Example requests and responses |
+| [validation.md](./validation.md)   | Data validation endpoints      |
+

@@ -12,10 +12,11 @@ from src.api.utils.error_handlers import (
 )
 
 
-router = APIRouter(prefix = "/metrics")
+router = APIRouter(prefix="/metrics")
 
 # Initialize configuration
 config = APIConfig()
+
 
 def get_latest_model(model_type: str):
     """Get the latest model path using centralized configuration."""
@@ -53,8 +54,9 @@ def get_metrics(model_type: str):
             raise DataNotFoundError(f"test_input.json at {test_path}")
 
         test_dataset = TestDataset.from_json_file(test_path)
-        
-        X_test = [list(sample.features.values()) for sample in test_dataset.samples]
+
+        X_test = [list(sample.features.values())
+                  for sample in test_dataset.samples]
         y_true = [sample.target for sample in test_dataset.samples]
 
         # Load model
@@ -95,7 +97,7 @@ def get_metrics(model_type: str):
             message=f"Metrics calculated successfully for {model_type}",
             data=metrics_data
         )
-        
+
     except Exception as e:
         if "test_input.json" in str(e) or "not found" in str(e).lower():
             handle_data_error("test_input.json", e)
