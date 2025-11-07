@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Train Models{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">Train Models</div>
+    <div class="card-body">
+        <form id="trainForm">
+            <div class="mb-3">
+                <label class="form-label">Model Type</label>
+                <select class="form-select" name="model_type" required>
+                    {% for mt in request.app.state.allowed_models %}
+                        <option value="{{ mt }}">{{ mt.replace('-',' ') | title }}</option>
+                    {% endfor %}
+                    <option value="all">All</option>
+                </select>
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="retrain" id="retrain">
+                <label class="form-check-label" for="retrain">Retrain (ignore cached)</label>
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="use_cv" id="use_cv" checked>
+                <label class="form-check-label" for="use_cv">Use Cross-Validation</label>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Hyperparameters (JSON string)</label>
+                <input type="text" class="form-control" name="hyperparameters" placeholder='{"n_estimators":200}'>
+            </div>
+            <button type="submit" class="btn btn-primary">Start Training</button>
+        </form>
+    </div>
+</div>
+
+<pre id="response" class="mt-4 bg-light p-3 border rounded"></pre>
+{% endblock %}
+
+{% block javascript %}
+<script>
+    document.getElementById('trainForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const payload = Object.fromEntries(fd);
+        payload.retrain = payload.retrain === 'on';
+        payload.use_cv   = payload.use_cv   === 'on';
+        if (payload.hyperparameters) {
+            try { payload.hyperparameters = JSON.parse(payload.hyperparameters); }
+            catch (_) {}
+        }
+        const res = await fetch('/train', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+    });
+</script>
+{% endblock %}

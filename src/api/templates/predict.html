@@ -1,0 +1,486 @@
+{% extends "base.html" %}
+
+{% block title %}Predict Churn{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h3>Predict Customer Churn</h3>
+            <small class="text-muted">Fill in customer features to get churn probability</small>
+        </div>
+        <div class="card-body">
+            <form id="predictForm">
+
+                <!-- MODEL TYPE -->
+                <div class="mb-3">
+                    <label class="form-label">Model Type <span class="text-danger">*</span></label>
+                    <select class="form-select" name="model_type" required>
+                        {% for mt in request.app.state.allowed_models %}
+                            <option value="{{ mt }}">{{ mt.replace('-',' ') | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <hr>
+
+                <!-- 1. BASIC INFO -->
+                <h5>Customer Info</h5>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label" title="Unique customer identifier">Customer ID</label>
+                        <input type="text" class="form-control" name="customer" placeholder="e.g. 1043968">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Number of months with the company">Tenure (months)</label>
+                        <input type="number" class="form-control" name="months" min="0" step="1">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Number of handsets issued">Phones</label>
+                        <input type="number" class="form-control" name="phones" min="0" step="1">
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 2. USAGE -->
+                <h5>Usage & Call Behavior</h5>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label" title="Monthly minutes of use">MOU</label>
+                        <input type="number" class="form-control" name="mou" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Outgoing calls">Out Calls</label>
+                        <input type="number" class="form-control" name="outcalls" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Incoming calls">In Calls</label>
+                        <input type="number" class="form-control" name="incalls" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Peak (on-net) calls">Peak VCE</label>
+                        <input type="number" class="form-control" name="peakvce" step="0.01">
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-md-3">
+                        <label class="form-label" title="Off-peak calls">Off-Peak VCE</label>
+                        <input type="number" class="form-control" name="opeakvce" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Dropped voice calls">Dropped VCE</label>
+                        <input type="number" class="form-control" name="dropvce" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Blocked voice calls">Blocked VCE</label>
+                        <input type="number" class="form-control" name="blckvce" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Unanswered calls">Unanswered VCE</label>
+                        <input type="number" class="form-control" name="unansvce" step="0.01">
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-md-3">
+                        <label class="form-label" title="Three-way calls">Three-Way</label>
+                        <input type="number" class="form-control" name="threeway" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Call waiting activations">Call Wait</label>
+                        <input type="number" class="form-control" name="callwait" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Call forwarding">Call FWD</label>
+                        <input type="number" class="form-control" name="callfwdv" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Dropped + blocked calls">Drop + Block</label>
+                        <input type="number" class="form-control" name="dropblk" step="0.01">
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-md-4">
+                        <label class="form-label" title="Customer care calls">Cust Care</label>
+                        <input type="number" class="form-control" name="custcare" step="0.01">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Received MOU (from others)">MOU Received</label>
+                        <input type="number" class="form-control" name="mourec" step="0.01">
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 3. BILLING -->
+                <h5>Billing & Revenue</h5>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label" title="Monthly recurring charge">Recurring Charge</label>
+                        <input type="number" class="form-control" name="recchrge" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Direct access charges">Direct AS</label>
+                        <input type="number" class="form-control" name="directas" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Overage minutes">Overage</label>
+                        <input type="number" class="form-control" name="overage" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Roaming charges">Roaming</label>
+                        <input type="number" class="form-control" name="roam" step="0.01">
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-md-4">
+                        <label class="form-label" title="Change in MOU vs prior">Change MOU</label>
+                        <input type="number" class="form-control" name="changem" step="0.01">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Change in revenue vs prior">Change Revenue</label>
+                        <input type="number" class="form-control" name="changer" step="0.01">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Total monthly revenue">Revenue</label>
+                        <input type="number" class="form-control" name="revenue" step="0.01">
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 4. DEVICE & PLAN -->
+                <h5>Device & Plan</h5>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label" title="Days since equipment issued">Equipment Days</label>
+                        <input type="number" class="form-control" name="eqpdays" min="0">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Number of models used">Models</label>
+                        <input type="number" class="form-control" name="models" min="0" step="1">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Active subscribers on account">Active Subs</label>
+                        <input type="number" class="form-control" name="actvsubs" min="0" step="1">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Unique subscribers">Unique Subs</label>
+                        <input type="number" class="form-control" name="uniqsubs" min="0" step="1">
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-md-4">
+                        <label class="form-label" title="Refurbished phone?">Refurbished</label>
+                        <select class="form-select" name="refurb">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Web-capable phone?">Web Capable</label>
+                        <select class="form-select" name="webcap">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 5. DEMOGRAPHICS -->
+                <h5>Demographics</h5>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label" title="Primary account holder age">Age 1</label>
+                        <input type="number" class="form-control" name="age1" min="0">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Secondary account holder age">Age 2</label>
+                        <input type="number" class="form-control" name="age2" min="0">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Has children?">Children</label>
+                        <select class="form-select" name="children">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Income group (1-9)">Income</label>
+                        <input type="number" class="form-control" name="income" min="1" max="9">
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-md-3">
+                        <label class="form-label" title="Owns truck?">Truck</label>
+                        <select class="form-select" name="truck">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Owns RV?">RV</label>
+                        <select class="form-select" name="rv">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Owns motorcycle?">Motorcycle</label>
+                        <select class="form-select" name="mcycle">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 6. CREDIT & RETENTION -->
+                <h5>Credit & Retention</h5>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label" title="Credit rating A">Credit A</label>
+                        <select class="form-select" name="credita">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Credit rating AA">Credit AA</label>
+                        <select class="form-select" name="creditaa">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Has credit card?">Credit Card</label>
+                        <select class="form-select" name="creditcd">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-md-4">
+                        <label class="form-label" title="Retention calls made">Retention Calls</label>
+                        <input type="number" class="form-control" name="retcalls" min="0">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Retention offers accepted">Retention Accepted</label>
+                        <input type="number" class="form-control" name="retaccpt" min="0">
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 7. MARKETING & BEHAVIOR -->
+                <h5>Marketing & Behavior</h5>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label" title="Mail order buyer?">Mail Order</label>
+                        <select class="form-select" name="mailord">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Responded to mail?">Mail Response</label>
+                        <select class="form-select" name="mailres">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Travel-related?">Travel</label>
+                        <select class="form-select" name="travel">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Owns PC?">PC Owner</label>
+                        <select class="form-select" name="pcown">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 8. PRIZM CODES (One-Hot) -->
+                <h5>PRIZM Cluster (Select One)</h5>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label" title="Rural">PRIZM Rural</label>
+                        <select class="form-select" name="prizmrur">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Urban">PRIZM Urban</label>
+                        <select class="form-select" name="prizmub">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" title="Town">PRIZM Town</label>
+                        <select class="form-select" name="prizmtwn">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 9. OCCUPATION (One-Hot) -->
+                <h5>Occupation (Select One)</h5>
+                <div class="row g-3">
+                    {% set occs = ["occprof", "occcler", "occcrft", "occstud", "occhmkr", "occret", "occself"] %}
+                    {% for occ in occs %}
+                    <div class="col-md-3">
+                        <label class="form-label" title="{{ occ[3:] | replace('occ','') | title }}">{{ occ[3:] | title }}</label>
+                        <select class="form-select" name="{{ occ }}">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <hr>
+
+                <!-- 10. MARITAL & HOUSING -->
+                <h5>Marital & Housing</h5>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label" title="Married?">Married</label>
+                        <select class="form-select" name="marryyes">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Unmarried?">Unmarried</label>
+                        <select class="form-select" name="marryun">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Owns or rents home?">Own/Rent</label>
+                        <select class="form-select" name="ownrent">
+                            <option value="0">Rent</option>
+                            <option value="1">Own</option>
+                        </select>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 11. NEW CELL & REFERRAL -->
+                <h5>New Cell & Referral</h5>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label" title="New cell: Yes">New Cell (Y)</label>
+                        <select class="form-select" name="newcelly">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="New cell: No">New Cell (N)</label>
+                        <select class="form-select" name="newcelln">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Referred by friend?">Referred</label>
+                        <select class="form-select" name="refer">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 12. PRICING & RETENTION CALL -->
+                <h5>Pricing & Retention</h5>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label" title="Promotional pricing applied?">Promo Pricing</label>
+                        <select class="form-select" name="setprcm">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Actual price">Set Price</label>
+                        <input type="number" class="form-control" name="setprc" step="0.01">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" title="Retention call made?">Retention Call</label>
+                        <select class="form-select" name="retcall">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- SUBMIT -->
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg">Predict Churn</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <pre id="response" class="mt-4 bg-light p-3 border rounded" style="display:none;"></pre>
+</div>
+{% endblock %}
+
+{% block javascript %}
+<script>
+    // Enable tooltips
+    const tooltipTriggerList = document.querySelectorAll('[title]')
+    tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el))
+
+    document.getElementById('predictForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const payload = Object.fromEntries(fd);
+        const model = payload.model_type; delete payload.model_type;
+
+        // Convert empty strings to null/0
+        for (let k in payload) {
+            if (payload[k] === '') payload[k] = null;
+        }
+
+        const res = await fetch(`/predict/${model}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        const pre = document.getElementById('response');
+        pre.style.display = 'block';
+        pre.textContent = JSON.stringify(data, null, 2);
+    });
+</script>
+{% endblock %}

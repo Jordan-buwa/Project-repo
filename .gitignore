@@ -10,7 +10,7 @@ tes.py
 test.py
 push.py
 .DS_Store
-*.json
+artifacts/*
 data/logs
 mlruns/
 *.joblib
@@ -22,11 +22,14 @@ tests/unit/
 tests/integration/
 !tests/__init__.py
 tests/
-test/
 *test*.py
+test.sh
 note.ipynb
 dvc.yaml
 tree.sh
-src/data_pipeline/preprocessing_artifacts.pkl
+src/data_pipeline/preprocessing_artifacts*
 doc.sh
 test_end.py
+test.sh
+node_modules/
+docker-compose.azure.yml

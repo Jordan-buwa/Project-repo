@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from src.api.utils.database import get_db_connection, save_customer_data, save_batch_customer_data, generate_batch_id
 from src.api.utils.customer_data import CustomerData, BatchCustomerData
+from fastapi.responses import PlainTextResponse
 from psycopg2.extras import RealDictCursor
 from pydantic import BaseModel
 from typing import List, Optional, Dict
@@ -8,7 +9,6 @@ import pandas as pd
 import logging
 from datetime import datetime
 import io
-import json
 
 router = APIRouter(prefix="/ingest")
 logger = logging.getLogger(__name__)
@@ -522,3 +522,32 @@ async def export_data(
         logger.error(f"Error exporting data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/customers")
+
+async def get_customers(limit: int = 100, offset: int = 0):
+
+    try:
+
+        with get_db_connection() as conn:
+
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+
+            cur.execute(
+
+                "SELECT * FROM customer_data ORDER BY created_at DESC LIMIT %s OFFSET %s",
+
+                (limit, offset)
+
+            )
+
+            rows = [dict(r) for r in cur.fetchall()]
+
+            cur.close()
+
+            return {"records": rows, "count": len(rows)}
+
+    except Exception as e:
+
+        logger.error(f"Error fetching customers: {e}")
+
+        raise HTTPException(status_code=500, detail=str(e))
