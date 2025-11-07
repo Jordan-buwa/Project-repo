@@ -14,7 +14,7 @@ By developing a holistic view of customer interactions, telecom companies can pr
 - Building a fully monitored system end-to-end for proactively identify churn using machine learning models
 ## Dataset: 
 - [New Cell2cell dataset](https://www.kaggle.com/datasets/jpacse/telecom-churn-new-cell2cell-dataset)
-- Alternative: [Telco customer churn](https://www.kaggle.com/datasets/blastchar/telco-customer-churn) 
+
 ## Implementation 
 - Libraries: Numpy, Pandas, Matplotlib, scikit-learn, pytorch
 - Models: Neural networks, XGBoost, Random Forest
