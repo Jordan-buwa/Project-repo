@@ -8,7 +8,8 @@ It loads the most recent version of the specified model type (e.g., XGBoost, Ran
 - **Metrics logic location:** `src/api/routers/metrics.py`  
 - **Models directory:** `models/`  
 - **Test data file:** `test_input.json`
-
+**Note:** The test data must follow the same schema as the `CustomerData` payload used in `/predict`.
+Each record should have a `features` dictionary matching model inputs and a `target` field for the true label.
 ---
 
 ## Endpoints Summary
@@ -30,15 +31,16 @@ It loads the most recent version of the specified model type (e.g., XGBoost, Ran
 **Note:** The API automatically selects the most recently saved model file for the chosen type.
 
 ---
-
 ## Request Format
-
-Before making a metrics request, ensure the following JSON file exists:
-
+## Test Data Format
+### Before making a metrics request, ensure the following JSON file exists:
 `test_input.json`
 
-Example content:
+- Each record must follow the `CustomerData` schema.
+- The `features` dictionary contains all input features the model expects.
+- The `target` field is the true label for evaluation.
 
+### Example content:
 ```json
 [
   {
@@ -62,6 +64,8 @@ Example content:
   }
 ]
 ```
+**Note**: Simulated test data can be generated using the `data_simulation.py` or similar scripts. Just point `config.test_data_path` to that file.
+
 ## Expected Response
 ```json
 {
@@ -71,7 +75,8 @@ Example content:
     "accuracy": 0.84,
     "f1_score": 0.79,
     "roc_auc": 0.85
-  }
+  },
+  "test_samples": 100
 }
 ```
 ## Error Responses
@@ -79,3 +84,41 @@ Example content:
 | ----------- | --------------------------------- | ------------------------------------------------------------------------------------------- |
 | `404`       | Test data file or model not found | `"detail": "test_input.json not found"`                                                     |
 | `400`       | Invalid model type                | `"detail": "Invalid model_type. Must be one of ['xgboost', 'neural-net', 'random-forest']"` |
+
+## Data Flow Diagram
+         ┌────────────────────┐
+         │  /predict Payload  │
+         │   CustomerData     │
+         │  (Single Record)   │
+         └─────────┬─────────┘
+                   │
+                   │ Schema
+                   │
+                   ▼
+         ┌────────────────────┐
+         │ Model Input Features│
+         │   (X) for model)   │
+         └─────────┬─────────┘
+                   │
+           ┌───────┴────────┐
+           │   Trained Model │
+           │ (XGBoost, RF,  │
+           │ Neural Net)     │
+           └───────┬────────┘
+                   │
+                   │ Predictions
+                   ▼
+         ┌────────────────────┐
+         │   /metrics Test    │
+         │    Data JSON       │
+         │ (Multiple Records) │
+         │ features + target  │
+         └─────────┬─────────┘
+                   │
+                   │ Evaluation
+                   ▼
+         ┌────────────────────┐
+         │   Performance       │
+         │   Metrics           │
+         │ Accuracy, F1, ROC  │
+         └────────────────────┘
