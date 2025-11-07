@@ -479,42 +479,113 @@ class DriftedDataSimulator:
         self.logger.info(f"Drift configuration set: {self.drift_config}")
     
     def load_and_clean_data(self, data_path: str = "data/raw/telco_churn.csv") -> pd.DataFrame:
-        """
-        Load and clean the dataset using your provided cleaning pipeline.
-        """
+        """Load and clean the dataset using your provided cleaning pipeline."""
         self.logger.info(f"Loading data from: {data_path}")
-        
+
         # Checking if file exists
         if not Path(data_path).exists():
             raise FileNotFoundError(f"Data file not found at: {data_path}")
-        
+
         # Loading data
         data = pd.read_csv(data_path)
         self.logger.info(f"Original data shape: {data.shape}")
-        
+
         # cleaning pipeline
         drop_cols = ["Unnamed: 0", "X", "customer", "traintest", "churndep"] 
         df = data.copy()
         df = df.drop(columns=[c for c in drop_cols if c in df.columns])
         self.logger.info(f"After dropping columns: {df.shape}")
-        
+
         # Identifying numeric and categorical columns
         continuous_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         categorical_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
-        
+
         self.logger.info(f"Found {len(continuous_cols)} continuous columns")
         self.logger.info(f"Found {len(categorical_cols)} categorical columns")
-        
+
         # Handling continuous columns - filter out completely NaN columns
         valid_continuous_cols = [col for col in continuous_cols if not df[col].isna().all()]
-        
+
         if valid_continuous_cols:
             num_imputer = SimpleImputer(strategy='mean')
             df[valid_continuous_cols] = num_imputer.fit_transform(df[valid_continuous_cols])
             self.logger.info(f"Imputed continuous columns: {len(valid_continuous_cols)}")
         else:
             self.logger.warning("No valid continuous columns found for imputation")
-        
+
         # Handling categorical columns
         if categorical_cols:
             cat_imputer = SimpleImputer(strategy='most_frequent')
+            df[categorical_cols] = cat_imputer.fit_transform(df[categorical_cols])
+            self.logger.info(f"Imputed categorical columns: {len(categorical_cols)}")
+        else:
+            self.logger.info("No categorical columns found")
+
+        # Final checking for missing values
+        missing_summary = df.isna().sum()
+        if missing_summary.any():
+            self.logger.warning(f"Missing values remain: {missing_summary[missing_summary > 0].to_dict()}")
+        else:
+            self.logger.info("All missing values filled successfully")
+
+        self.logger.info(f"Final cleaned data shape: {df.shape}")
+        return df
+def main():
+    """Main function to demonstrate data simulation."""
+    import time
+    
+    print("=== Starting Data Simulation ===")
+    
+    # Initialize simulators
+    realistic_simulator = RealisticDataSimulator(random_state=42)
+    drifted_simulator = DriftedDataSimulator(random_state=42)
+    
+    try:
+        # Realistic Data Simulation
+        print("\n--- Realistic Data Simulation ---")
+        start_time = time.time()
+        
+        realistic_simulator.fit(
+            data_path="data/raw/telco_churn.csv", 
+            target="churn", 
+            sample_size=500
+        )
+        
+        realistic_data = realistic_simulator.simulate(n_samples=1000)
+        print(f"✓ Generated realistic data: {realistic_data.shape}")
+        print(f"Target distribution:\n{realistic_data['churn'].value_counts()}")
+        
+        # Getting simulation report
+        report = realistic_simulator.get_simulation_report()
+        print(f"✓ Simulation completed in {time.time() - start_time:.2f} seconds")
+        
+        # Drifted Data Simulation  
+        print("\n--- Drifted Data Simulation ---")
+        start_time = time.time()
+        
+        # Configuring drift
+        drifted_simulator.configure_drift(
+            target_drift_strength=0.3,
+            feature_drift_strength=0.4,
+            categorical_drift_strength=0.5
+        )
+        
+        # Note: You'll need to implement the fit and simulate methods for DriftedDataSimulator
+        # drifted_data = drifted_simulator.simulate(n_samples=1000)
+        # print(f"Generated drifted data: {drifted_data.shape}")
+        
+        print(f"Drift configuration completed in {time.time() - start_time:.2f} seconds")
+        
+        # Saving sample of generated data
+        print("\n--- Saving Results ---")
+        realistic_data.head(100).to_csv("data/processed/simulated_realistic_sample.csv", index=False)
+        print("Saved realistic data sample to: data/processed/simulated_realistic_sample.csv")
+        
+        print(f"\n=== Data Simulation Completed Successfully ===")
+        
+    except Exception as e:
+        print(f"Error during simulation: {e}")
+        raise
+
+if __name__ == "__main__":
+        main()
