@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: docker/data_pipeline/Dockerfile
     volumes:
-      - ./src:/app/src:ro
+      - ./src:/app/src
       - ./config:/app/config:ro
       - ./data:/app/data
       - ./logs:/app/logs
