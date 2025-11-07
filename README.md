@@ -47,12 +47,15 @@ By developing a holistic view of customer interactions, telecom companies can pr
 │   └── training_pipeline
 │       └── Dockerfile
 ├── docker-compose.api.yml
+├── docker-compose.yml
 ├── documentations
 │   ├── api_overview.md
+|   ├── database.md
 │   ├── examples.md
 │   ├── metrics_api.md
 │   ├── predict_api.md
 │   └── train_api.md
+|   ├── validation.md
 ├── dvc.lock
 ├── images
 │   ├── Churn_predicition_system_architecture.png
@@ -90,11 +93,11 @@ By developing a holistic view of customer interactions, telecom companies can pr
 │   │   └── validate_after_preprocess.py
 │   ├── models
 │   │   ├── __init__.py
-│   │   ├── churn_nn.py
+│   │   ├── train_nn.py
 │   │   ├── train_NN
 │   │   │   └── neural_net.py
-│   │   ├── train_RandomForest.py
-│   │   ├── train_xgboost.py
+│   │   ├── train_rf.py
+│   │   ├── train_xgb.py
 │   │   ├── tuning
 │   │   │   └── optuna_nn.py
 │   │   └── utils
