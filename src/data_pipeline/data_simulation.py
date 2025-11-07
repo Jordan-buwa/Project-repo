@@ -1,26 +1,19 @@
 import pandas as pd
 import numpy as np
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 from sklearn.impute import SimpleImputer
 from pathlib import Path
 
-class DataSimulator:
+class RealisticDataSimulator:
     """
-    A robust dataset simulator for generating synthetic data that preserves 
-    statistical properties of the original dataset.
-    
-    Features:
-    - Representative sampling with stratification
-    - Preserves continuous variable correlations
-    - Maintains categorical distributions
-    - Ensures class balance and category diversity
-    - Handles missing values appropriately
+    Simulates data that preserves original statistical properties.
+    Use this for creating realistic synthetic data that mimics your original dataset.
     """
     
     def __init__(self, random_state: int = 42, logger: Optional[logging.Logger] = None):
         """
-        Initialize the DataSimulator.
+        Initialize the RealisticDataSimulator.
         
         Parameters:
         - random_state: int, random seed for reproducibility
@@ -37,7 +30,7 @@ class DataSimulator:
         
     def _setup_default_logger(self) -> logging.Logger:
         """Setup default logger if none provided."""
-        logger = logging.getLogger('DataSimulator')
+        logger = logging.getLogger('RealisticDataSimulator')
         if not logger.handlers:
             handler = logging.StreamHandler()
             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -286,7 +279,7 @@ class DataSimulator:
         - target: str, target column name
         - sample_size: int, size of representative sample to use for fitting
         """
-        self.logger.info(f"Fitting DataSimulator with target '{target}'")
+        self.logger.info(f"Fitting RealisticDataSimulator with target '{target}'")
         self.target_name = target
         
         # Loading and clean data
@@ -315,7 +308,7 @@ class DataSimulator:
         for col in self.feature_types['all_categorical']:
             self.original_stats['categorical_proportions'][col] = original_df[col].value_counts(normalize=True).to_dict()
         
-        self.logger.info("DataSimulator fitting completed successfully")
+        self.logger.info("RealisticDataSimulator fitting completed successfully")
     
     def simulate(self, n_samples: int = 1000) -> pd.DataFrame:
         """
@@ -420,25 +413,179 @@ class DataSimulator:
         }
 
 
+class DriftedDataSimulator:
+    """
+    A robust dataset simulator with controlled drift injection for generating 
+    synthetic data that can simulate real-world data drift scenarios.
+    """
+    
+    def __init__(self, random_state: int = 42, logger: Optional[logging.Logger] = None):
+        """
+        Initialize the DriftedDataSimulator.
+        
+        Parameters:
+        - random_state: int, random seed for reproducibility
+        - logger: logging.Logger, optional logger for tracking
+        """
+        self.random_state = random_state
+        self.logger = logger or self._setup_default_logger()
+        np.random.seed(random_state)
+        
+        # Storing configuration
+        self.feature_types = {}
+        self.drift_config = {}
+        
+    def _setup_default_logger(self) -> logging.Logger:
+        """Setup default logger if none provided."""
+        logger = logging.getLogger('DriftedDataSimulator')
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
+        return logger
+    
+    def configure_drift(self, 
+                       target_drift_strength: float = 0.3,
+                       feature_drift_strength: float = 0.4,
+                       categorical_drift_strength: float = 0.5,
+                       correlation_drift_strength: float = 0.3,
+                       introduce_new_categories: bool = True,
+                       shift_marginal_distributions: bool = True,
+                       extreme_value_injection: bool = True):
+        """
+        Configure the strength and type of data drift to inject.
+        
+        Parameters:
+        - target_drift_strength: 0-1, how much to shift target distribution
+        - feature_drift_strength: 0-1, how much to shift feature distributions
+        - categorical_drift_strength: 0-1, how much to change category frequencies
+        - correlation_drift_strength: 0-1, how much to change feature correlations
+        - introduce_new_categories: whether to add new categories in categorical features
+        - shift_marginal_distributions: whether to shift min/max/mean of continuous features
+        - extreme_value_injection: whether to inject extreme values outside original ranges
+        """
+        self.drift_config = {
+            'target_drift_strength': max(0, min(1, target_drift_strength)),
+            'feature_drift_strength': max(0, min(1, feature_drift_strength)),
+            'categorical_drift_strength': max(0, min(1, categorical_drift_strength)),
+            'correlation_drift_strength': max(0, min(1, correlation_drift_strength)),
+            'introduce_new_categories': introduce_new_categories,
+            'shift_marginal_distributions': shift_marginal_distributions,
+            'extreme_value_injection': extreme_value_injection
+        }
+        
+        self.logger.info(f"Drift configuration set: {self.drift_config}")
+    
+    def load_and_clean_data(self, data_path: str = "data/raw/telco_churn.csv") -> pd.DataFrame:
+        """Load and clean the dataset using your provided cleaning pipeline."""
+        self.logger.info(f"Loading data from: {data_path}")
+
+        # Checking if file exists
+        if not Path(data_path).exists():
+            raise FileNotFoundError(f"Data file not found at: {data_path}")
+
+        # Loading data
+        data = pd.read_csv(data_path)
+        self.logger.info(f"Original data shape: {data.shape}")
+
+        # cleaning pipeline
+        drop_cols = ["Unnamed: 0", "X", "customer", "traintest", "churndep"] 
+        df = data.copy()
+        df = df.drop(columns=[c for c in drop_cols if c in df.columns])
+        self.logger.info(f"After dropping columns: {df.shape}")
+
+        # Identifying numeric and categorical columns
+        continuous_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        categorical_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
+
+        self.logger.info(f"Found {len(continuous_cols)} continuous columns")
+        self.logger.info(f"Found {len(categorical_cols)} categorical columns")
+
+        # Handling continuous columns - filter out completely NaN columns
+        valid_continuous_cols = [col for col in continuous_cols if not df[col].isna().all()]
+
+        if valid_continuous_cols:
+            num_imputer = SimpleImputer(strategy='mean')
+            df[valid_continuous_cols] = num_imputer.fit_transform(df[valid_continuous_cols])
+            self.logger.info(f"Imputed continuous columns: {len(valid_continuous_cols)}")
+        else:
+            self.logger.warning("No valid continuous columns found for imputation")
+
+        # Handling categorical columns
+        if categorical_cols:
+            cat_imputer = SimpleImputer(strategy='most_frequent')
+            df[categorical_cols] = cat_imputer.fit_transform(df[categorical_cols])
+            self.logger.info(f"Imputed categorical columns: {len(categorical_cols)}")
+        else:
+            self.logger.info("No categorical columns found")
+
+        # Final checking for missing values
+        missing_summary = df.isna().sum()
+        if missing_summary.any():
+            self.logger.warning(f"Missing values remain: {missing_summary[missing_summary > 0].to_dict()}")
+        else:
+            self.logger.info("All missing values filled successfully")
+
+        self.logger.info(f"Final cleaned data shape: {df.shape}")
+        return df
+def main():
+    """Main function to demonstrate data simulation."""
+    import time
+    
+    print("=== Starting Data Simulation ===")
+    
+    # Initialize simulators
+    realistic_simulator = RealisticDataSimulator(random_state=42)
+    drifted_simulator = DriftedDataSimulator(random_state=42)
+    
+    try:
+        # Realistic Data Simulation
+        print("\n--- Realistic Data Simulation ---")
+        start_time = time.time()
+        
+        realistic_simulator.fit(
+            data_path="data/raw/telco_churn.csv", 
+            target="churn", 
+            sample_size=500
+        )
+        
+        realistic_data = realistic_simulator.simulate(n_samples=1000)
+        print(f"✓ Generated realistic data: {realistic_data.shape}")
+        print(f"Target distribution:\n{realistic_data['churn'].value_counts()}")
+        
+        # Getting simulation report
+        report = realistic_simulator.get_simulation_report()
+        print(f"✓ Simulation completed in {time.time() - start_time:.2f} seconds")
+        
+        # Drifted Data Simulation  
+        print("\n--- Drifted Data Simulation ---")
+        start_time = time.time()
+        
+        # Configuring drift
+        drifted_simulator.configure_drift(
+            target_drift_strength=0.3,
+            feature_drift_strength=0.4,
+            categorical_drift_strength=0.5
+        )
+        
+        # Note: You'll need to implement the fit and simulate methods for DriftedDataSimulator
+        # drifted_data = drifted_simulator.simulate(n_samples=1000)
+        # print(f"Generated drifted data: {drifted_data.shape}")
+        
+        print(f"Drift configuration completed in {time.time() - start_time:.2f} seconds")
+        
+        # Saving sample of generated data
+        print("\n--- Saving Results ---")
+        realistic_data.head(100).to_csv("data/processed/simulated_realistic_sample.csv", index=False)
+        print("Saved realistic data sample to: data/processed/simulated_realistic_sample.csv")
+        
+        print(f"\n=== Data Simulation Completed Successfully ===")
+        
+    except Exception as e:
+        print(f"Error during simulation: {e}")
+        raise
+
 if __name__ == "__main__":
-    # Initializing simulator
-    simulator = DataSimulator(random_state=42)
-    
-    # Fitting the simulator (this loads, cleans, and analyzes your data)
-    simulator.fit(data_path="data/raw/telco_churn.csv", target="churn", sample_size=500)
-    
-    # Generating 1000 synthetic samples as requested
-    synthetic_data = simulator.simulate(n_samples=1000)
-    
-    # Getting simulation report
-    report = simulator.get_simulation_report()
-    print("\nSIMULATION REPORT")
-    print(f"Target: {report['target']}")
-    print(f"Original data shape: {simulator.original_df.shape}")
-    print(f"Synthetic data shape: {synthetic_data.shape}")
-    print(f"Feature types: {report['feature_types']}")
-    
-    print("\nSYNTHETIC DATA PREVIEW")
-    print(synthetic_data.head())
-    print(f"\nTarget distribution in synthetic data:")
-    print(synthetic_data['churn'].value_counts(normalize=True))
+        main()
