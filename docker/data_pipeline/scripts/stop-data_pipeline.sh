@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # stop-data_pipeline.sh
-echo "Stopping Data Pipeline services..."
+echo "Stopping Data Pipeline service..."
 
-# Stop and remove containers
-docker stop data-pipeline api-validation 2>/dev/null || true
-docker rm data-pipeline api-validation 2>/dev/null || true
+# Stop and remove container
+docker stop data-pipeline 2>/dev/null || true
+docker rm data-pipeline 2>/dev/null || true
 
-echo "Services stopped successfully!"
+echo "Data Pipeline stopped successfully!"

@@ -1,4 +1,3 @@
-# Dockerfile for Data Pipeline
 FROM python:3.9-slim
 
 WORKDIR /app
@@ -16,11 +15,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY src/ ./src/
 COPY config/ ./config/
-COPY models/ ./models/
 COPY data/ ./data/
 
-# Create necessary directories
-RUN mkdir -p src/data_pipeline/logs/ingested \
+# Create necessary directories for data pipeline only
+RUN mkdir -p \
+    src/data_pipeline/logs/ingested \
     src/data_pipeline/logs/preprocessed \
     data/backup \
     data/processed \
@@ -30,4 +29,4 @@ RUN mkdir -p src/data_pipeline/logs/ingested \
 ENV PYTHONPATH=/app
 
 # Run data pipeline
-CMD ["python", "src/data_pipeline/data_pipeline.py"]
+CMD ["python", "src/data_pipeline/pipeline_data.py"]
