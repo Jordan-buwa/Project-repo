@@ -16,8 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY config/ ./config/
 
-# Copying and set up entrypoint
-COPY docker/data_pipeline/entrypoint.sh /entrypoint.sh
+# Replace with:
+RUN echo '#!/bin/bash\nset -e\necho "=== Data Pipeline Entrypoint ==="\necho "Creating log directories..."\nmkdir -p /app/logs/ingested /app/logs/preprocessed /app/logs/validation\necho "Running data pipeline with arguments: $@"\nexec python src/data_pipeline/pipeline_data.py "$@"' > /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 # Create necessary directories for data and logs
 RUN mkdir -p \
