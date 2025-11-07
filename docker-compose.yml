@@ -17,7 +17,7 @@ services:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     depends_on:
       - mlflow
-    command: python src/models/train_xgb.py
+    command: python3 src/models/train_xgb.py
 
   #  MLFLOW SERVICE 
   mlflow:
