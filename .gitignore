@@ -10,7 +10,7 @@ tes.py
 test.py
 push.py
 .DS_Store
-*.json
+artifacts/*
 data/logs
 mlruns/
 *.joblib
@@ -27,6 +27,8 @@ test/
 note.ipynb
 dvc.yaml
 tree.sh
-src/data_pipeline/preprocessing_artifacts.pkl
+src/data_pipeline/preprocessing_artifacts*
 doc.sh
 test_end.py
+test.sh
+docker-compose.azure.yml
