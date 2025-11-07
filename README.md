@@ -119,7 +119,15 @@ By developing a holistic view of customer interactions, telecom companies can pr
 ```bash
 pip install -r requirements.txt
 ```
+## API and endpoints
 
+The churn API serves at http://localhost/8000
+Have a look at the endpoints here:
+1. [API overview](documentations/api_overview.md)
+2. [Prediction endpoint](documentations/predict_api.md)
+3. [Model metric](documentations/metrics_api.md)
+4. [Train requests](documentations/train_api.md)
+5. [Examples](documentations/examples.md)
 
 ## Authors
 - [Jordan Buwa](https://github.com/Jordan-buwa)
