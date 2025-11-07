@@ -14,7 +14,6 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.api.ml_models import load_all_models, clear_models, get_all_models_info
 from src.api.routers import predict, train, validate, metrics, ingest
 from src.api.utils.error_handlers import api_exception_handler, validation_exception_handler
-from src.utils.azure_config import AzureConfigManager
 from src.api.utils.config import get_allowed_model_types 
 
 
@@ -47,12 +46,6 @@ async def lifespan(app: FastAPI):
     logger.info("Starting API server...")
     if not validate_startup():
         logger.error("Startup validation failed, but continuing...")
-
-    config_manager = AzureConfigManager()
-    app.state.config_manager = config_manager
-
-    if os.getenv('ENVIRONMENT') == 'production':
-        config_manager.upload_configs_to_azure()
 
     try:
         logger.info("Loading ML models...")
