@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  data-pipeline:
+    build:
+      context: .
+      dockerfile: docker/data_pipeline/Dockerfile
+    volumes:
+      - ./src:/app/src:ro
+      - ./config:/app/config:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - PYTHONPATH=/app
+      - DATA_DIR=/app/data
+      - LOG_DIR=/app/logs
+    working_dir: /app

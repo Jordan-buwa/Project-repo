@@ -2,31 +2,38 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Installing system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
+# Copying requirements first (for better caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copying application code
 COPY src/ ./src/
 COPY config/ ./config/
-COPY data/ ./data/
 
-# Create necessary directories for data pipeline only
+# Copying and set up entrypoint
+COPY docker/data_pipeline/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+# Create necessary directories for data and logs
 RUN mkdir -p \
-    src/data_pipeline/logs/ingested \
-    src/data_pipeline/logs/preprocessed \
-    data/backup \
-    data/processed \
-    data/ingestion/failed_batches
+    /app/data/raw \
+    /app/data/processed \
+    /app/data/backup \
+    /app/data/ingestion/failed_batches \
+    /app/logs/ingested \
+    /app/logs/preprocessed \
+    /app/logs/validation
 
-# Set environment variables
+# Setting environment variables
 ENV PYTHONPATH=/app
+ENV DATA_DIR=/app/data
+ENV LOG_DIR=/app/logs
 
-# Run data pipeline
-CMD ["python", "src/data_pipeline/pipeline_data.py"]
+# Using entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["--help"]
