@@ -39,16 +39,16 @@ def setup_logger(log_path: str, log_level: str = "INFO"):
         level=getattr(logging, log_level.upper(), logging.INFO),
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
-    
+
     # Also add console handler for immediate feedback
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(getattr(logging, log_level.upper(), logging.INFO))
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     console_handler.setFormatter(formatter)
-    
+
     logger = logging.getLogger(__name__)
     logger.addHandler(console_handler)
-    
+
     return logger
 
 
@@ -68,30 +68,33 @@ class XGBoostTrainer:
                 best_f1 = score
                 best_thresh = t
         return best_thresh, best_f1
+
     def _validate_data(self, X, y):
         """Validate input data before training"""
         self.logger.info("Validating input data...")
-        
+
         # Check for NaN values
         if X.isnull().any().any():
             nan_cols = X.columns[X.isnull().any()].tolist()
             self.logger.error(f"NaN values found in features: {nan_cols}")
-            raise ValueError(f"Data contains NaN values in columns: {nan_cols}")
-        
+            raise ValueError(
+                f"Data contains NaN values in columns: {nan_cols}")
+
         if y.isnull().any():
             self.logger.error("NaN values found in target variable")
             raise ValueError("Target variable contains NaN values")
-        
+
         # Check data types
         if not all(X.dtypes.apply(lambda x: np.issubdtype(x, np.number))):
-            non_numeric_cols = X.columns[~X.dtypes.apply(lambda x: np.issubdtype(x, np.number))].tolist()
+            non_numeric_cols = X.columns[~X.dtypes.apply(
+                lambda x: np.issubdtype(x, np.number))].tolist()
             self.logger.error(f"Non-numeric columns found: {non_numeric_cols}")
             raise ValueError(f"Non-numeric columns: {non_numeric_cols}")
-        
+
         # Check target distribution
         target_distribution = y.value_counts()
         self.logger.info(f"Target distribution:\n{target_distribution}")
-        
+
         if len(target_distribution) < 2:
             self.logger.error("Target variable has only one class")
             raise ValueError("Target variable must have at least two classes")
@@ -165,10 +168,11 @@ class XGBoostTrainer:
                         random_state=self.config["random_state"],
                         verbose=1  # Add progress output
                     )
-                    
-                    self.logger.info(f"Starting hyperparameter tuning for fold {fold}...")
+
+                    self.logger.info(
+                        f"Starting hyperparameter tuning for fold {fold}...")
                     tuner.fit(X_train, y_train)
-                    
+
                 except Exception as e:
                     self.logger.error(f"Fold {fold} failed: {e}")
                     self.logger.error(traceback.format_exc())
@@ -198,7 +202,7 @@ class XGBoostTrainer:
                 #  MLflow Model Logging
                 fold_input_example = X_val.head(5)
                 mlflow.xgboost.log_model(
-                    best_model, name=f"xgboost_model_fold_{fold}", input_example=fold_input_example)
+                    best_model, name=f"xgboost_model_fold_{fold}", input_example=fold_input_example, registered_model_name="Churn_XGB_Model")
 
                 fold_metrics.append({
                     "fold": fold,
@@ -245,11 +249,13 @@ class XGBoostTrainer:
                 try:
                     smt = SMOTETomek(random_state=self.config["random_state"])
                     X_train, y_train = smt.fit_resample(X_train, y_train)
-                    self.logger.info(f"Fold {fold}: Training size after SMOTETomek: {X_train.shape[0]}")
+                    self.logger.info(
+                        f"Fold {fold}: Training size after SMOTETomek: {X_train.shape[0]}")
                 except Exception as e:
                     self.logger.error(f"SMOTETomek failed in fold {fold}: {e}")
                     # Continue without resampling
-                    self.logger.info("Continuing without SMOTETomek resampling")
+                    self.logger.info(
+                        "Continuing without SMOTETomek resampling")
 
             final_model = XGBClassifier(
                 objective='binary:logistic',
@@ -342,14 +348,16 @@ if __name__ == "__main__":
 
     if os.path.exists("data/processed/processed_data.csv"):
         df_processed = pd.read_csv("data/processed/processed_data.csv")
-    else: df_processed = fetch_preprocessed()
+    else:
+        df_processed = fetch_preprocessed()
     target_col = config["target_column"]
     logger.info(f"Target column: {target_col}")
 
     # Check if target column exists
     if target_col not in df_processed.columns:
         available_cols = df_processed.columns.tolist()
-        logger.error(f"Target column '{target_col}' not found. Available columns: {available_cols}")
+        logger.error(
+            f"Target column '{target_col}' not found. Available columns: {available_cols}")
         raise ValueError(f"Target column '{target_col}' not found in data")
 
     X = df_processed.drop(columns=[target_col])
