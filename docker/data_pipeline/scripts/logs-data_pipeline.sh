@@ -2,20 +2,16 @@
 
 # Function to show usage
 usage() {
-    echo "Usage: $0 [service] [options]"
-    echo "Services:"
-    echo "  api          - Show API Validation logs"
-    echo "  data         - Show Data Pipeline logs"
-    echo "  all          - Show all logs (default)"
+    echo "Usage: $0 [options]"
     echo "Options:"
     echo "  -f           - Follow logs"
     echo "  -n LINES     - Number of lines to show"
     echo "  --since TIME - Show logs since timestamp"
+    echo "  -h, --help   - Show this help message"
     exit 1
 }
 
 # Default values
-SERVICE="all"
 FOLLOW=""
 LINES=""
 SINCE=""
@@ -23,10 +19,6 @@ SINCE=""
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        api|data|all)
-            SERVICE=$1
-            shift
-            ;;
         -f)
             FOLLOW="-f"
             shift
@@ -49,21 +41,5 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Show logs based on service
-case $SERVICE in
-    api)
-        echo "=== API Validation Logs ==="
-        docker logs api-validation $FOLLOW $LINES $SINCE
-        ;;
-    data)
-        echo "=== Data Pipeline Logs ==="
-        docker logs data-pipeline $FOLLOW $LINES $SINCE
-        ;;
-    all)
-        echo "=== API Validation Logs ==="
-        docker logs api-validation $LINES $SINCE
-        echo ""
-        echo "=== Data Pipeline Logs ==="
-        docker logs data-pipeline $LINES $SINCE
-        ;;
-esac
+echo "=== Data Pipeline Logs ==="
+docker logs data-pipeline $FOLLOW $LINES $SINCE
