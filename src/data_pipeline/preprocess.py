@@ -328,6 +328,41 @@ class DataPreprocessor:
         self.logger.info("Saving processed data to PostgreSQL...")
         self.database_save()
 
+    # def database_save(self):
+    #     """Save processed data snapshot to PostgreSQL"""
+    #     self.logger.info("Saving processed data snapshot to PostgreSQL...")
+    #     try:
+    #         DB_USER = os.getenv("POSTGRES_DB_USER", "jawpostgresdb")
+    #         DB_PASS = os.getenv("POSTGRES_PASSWORD")
+    #         DB_HOST = os.getenv(
+    #             "POSTGRES_HOST", "jaw-postgresdb.postgres.database.azure.com")
+    #         DB_PORT = os.getenv("POSTGRES_PORT", "5432")
+    #         DB_NAME = os.getenv("POSTGRES_DB_NAME", "postgres")
+
+    #         conn_str = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
+    #         engine = create_engine(conn_str)
+
+    #         snapshot_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    #         snapshot_table = f"customer_prod_data"
+    #         self.df.to_sql(snapshot_table, engine,
+    #                        index=False, if_exists="replace")
+
+    #         metadata = pd.DataFrame([{
+    #             "snapshot_id": snapshot_id,
+    #             "timestamp": datetime.utcnow(),
+    #             "row_count": len(self.df),
+    #             "feature_count": len(self.df.columns),
+    #             "storage_type": "postgres",
+    #             "artifact_file": "data/processed/preprocessing_artifacts.json"
+    #         }])
+    #         metadata.to_sql("preprocessing_metadata", engine,
+    #                         index=False, if_exists="append")
+    #         self.logger.info(
+    #             f"Snapshot {snapshot_id} stored successfully in PostgreSQL.")
+    #     except Exception as e:
+    #         self.logger.error(
+    #             f"Failed to save processed data to PostgreSQL: {e}")
+    #         raise
     def database_save(self):
         """Save processed data snapshot to PostgreSQL"""
         self.logger.info("Saving processed data snapshot to PostgreSQL...")
@@ -339,13 +374,18 @@ class DataPreprocessor:
             DB_PORT = os.getenv("POSTGRES_PORT", "5432")
             DB_NAME = os.getenv("POSTGRES_DB_NAME", "postgres")
 
+            # Checking if database connection should be attempted
+            if not DB_PASS:
+                self.logger.warning("POSTGRES_PASSWORD not set. Skipping database save.")
+                return
+
             conn_str = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
             engine = create_engine(conn_str)
 
             snapshot_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             snapshot_table = f"customer_prod_data"
             self.df.to_sql(snapshot_table, engine,
-                           index=False, if_exists="replace")
+                        index=False, if_exists="replace")
 
             metadata = pd.DataFrame([{
                 "snapshot_id": snapshot_id,
@@ -359,10 +399,18 @@ class DataPreprocessor:
                             index=False, if_exists="append")
             self.logger.info(
                 f"Snapshot {snapshot_id} stored successfully in PostgreSQL.")
+                
         except Exception as e:
-            self.logger.error(
-                f"Failed to save processed data to PostgreSQL: {e}")
-            raise
+            # Check if database is required
+            database_required = os.getenv("DATABASE_REQUIRED", "false").lower() == "true"
+            
+            if database_required:
+                self.logger.error(f"Failed to save processed data to PostgreSQL: {e}")
+                raise  # Crash pipeline if database is required
+            else:
+                self.logger.warning(f"Could not save to PostgreSQL: {e}")
+                self.logger.info("Data saved locally only - database was optional")
+                # No raise - pipeline continues
 
     def run_preprocessing_pipeline(self):
         """Run the full preprocessing flow in correct order"""

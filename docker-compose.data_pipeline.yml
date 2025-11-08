@@ -1,3 +1,4 @@
+# docker-compose.yml
 version: '3.8'
 
 services:
@@ -14,4 +15,26 @@ services:
       - PYTHONPATH=/app
       - DATA_DIR=/app/data
       - LOG_DIR=/app/logs
+      - DATABASE_REQUIRED=${DATABASE_REQUIRED:-true}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB_USER=${POSTGRES_DB_USER:-postgres}
+      - POSTGRES_HOST=postgres  # ← Use service name as host
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB_NAME=${POSTGRES_DB_NAME:-myapp}
     working_dir: /app
+    depends_on:
+      - postgres  # ← Ensure postgres starts first
+
+  postgres:  
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB_NAME:-myapp}
+      - POSTGRES_USER=${POSTGRES_DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
