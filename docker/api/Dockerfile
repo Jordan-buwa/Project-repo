@@ -20,10 +20,19 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 #RUN pip install -e .
 
-# Copy source code
+# Install additional Azure packages
+RUN pip install --no-cache-dir \
+    azure-storage-blob \
+    azure-identity \
+    opencensus-ext-azure \
+    opencensus-ext-logging
+
+# Copy project files
 COPY src/ ./src/
 COPY config/ ./config/
-COPY retrain.py .
+COPY models/ ./models/
+COPY data/ ./data/
+COPY artifacts/ ./artifacts/
 
 # Create necessary directories
 RUN mkdir -p \

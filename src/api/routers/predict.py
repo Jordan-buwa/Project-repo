@@ -61,17 +61,48 @@ def load_model(model_path: str, model_type: str):
     else:
         return joblib.load(model_path)
 
+def map_dropdowns(payload: dict) -> dict:
+    # PRIZM
+    prizm = payload.pop("prizm_cluster", None)
+    if prizm:
+        payload["prizmrur"] = 1 if prizm == "rural" else 0
+        payload["prizmub"]  = 1 if prizm == "urban" else 0
+        payload["prizmtwn"] = 1 if prizm == "town"  else 0
+
+    # OCCUPATION
+    occ = payload.pop("occupation", None)
+    occ_map = {
+        "professional": "occprof",
+        "clerical": "occcler",
+        "craft": "occcrft",
+        "student": "occstud",
+        "homemaker": "occhmkr",
+        "retired": "occret",
+        "self-employed": "occself"
+    }
+    for k in occ_map.values():
+        payload[k] = 0
+    if occ and occ in occ_map:
+        payload[occ_map[occ]] = 1
+
+    # MARITAL
+    marital = payload.pop("marital_status", "unknown")
+    payload["marryyes"] = 1 if marital == "married" else 0
+    payload["marryun"] = 1 if marital == "unmarried" else 0
+
+    return payload
 
 @router.post("/{model_type}", response_model=PredictionResponse)
 def predict_from_payload(
     model_type: str,
-    payload: CustomerData = Body(..., example={
+    payload: Dict[str, Any] = Body(..., example={
         "revenue": 45.3, "mou": 120.5, "months": 12, "credita": "A",
     })
 ):
     """
     Accept raw customer data → predict churn.
     """
+    payload = map_dropdowns(payload)
     if model_type not in get_allowed_model_types():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -79,7 +110,7 @@ def predict_from_payload(
         )
 
     try:
-        raw_data = payload.dict()
+        raw_data = payload
 
         # Check if churn value is provided
         provided_churn = raw_data.get('churn')

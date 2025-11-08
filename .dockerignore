@@ -23,7 +23,5 @@ documentations/
 *.h5
 *.pth
 *.pt
-models/
-artifacts/
 logs/
 docker/

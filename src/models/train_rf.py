@@ -228,7 +228,8 @@ if best_model_name:
     os.makedirs(versions_dir, exist_ok=True)
     
     # Creating version name
-    model_version_name = f"rf_churn_v{timestamp}"
+    model_version_name = f"random_forest_churn_v{timestamp}"
+    joblib.dump(best_model, os.path.join(MODEL_DIR, model_version_name))
     local_model_path = os.path.join(versions_dir, f"{model_version_name}.joblib")
     joblib.dump(best_model, local_model_path)
     logger.info(f"Best model saved locally at: {local_model_path}")

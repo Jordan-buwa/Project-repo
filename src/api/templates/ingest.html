@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Ingest Data{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Ingest Customer Data</h1>
+
+<div class="row g-4">
+    <!-- SINGLE RECORD -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">Single Record Ingest</div>
+            <div class="card-body">
+                <form id="singleForm">
+                    <div class="mb-3"><label class="form-label">Customer ID</label>
+                        <input type="text" class="form-control" name="customer_id" required></div>
+                    <div class="mb-3"><label class="form-label">Revenue</label>
+                        <input type="number" class="form-control" name="revenue" step="0.01"></div>
+                    <div class="mb-3"><label class="form-label">MOU</label>
+                        <input type="number" class="form-control" name="mou" step="0.01"></div>
+                    <div class="mb-3"><label class="form-label">Churn</label>
+                        <input type="number" class="form-control" name="churn"></div>
+                    <button type="submit" class="btn btn-primary">Ingest Single</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- BATCH FILE -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">Batch File Upload</div>
+            <div class="card-body">
+                <form id="batchForm" enctype="multipart/form-data">
+                    <div class="mb-3"><label class="form-label">File (CSV/Excel)</label>
+                        <input type="file" class="form-control" name="file" accept=".csv,.xlsx" required></div>
+                    <button type="submit" class="btn btn-primary">Upload Batch</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<pre id="response" class="mt-4 bg-light p-3 border rounded"></pre>
+{% endblock %}
+
+{% block javascript %}
+<script>
+    document.querySelectorAll('form').forEach(f => {
+        f.addEventListener('submit', async e => {
+            e.preventDefault();
+            const fd = new FormData(f);
+            const url = f.id === 'singleForm' ? '/ingest/single' : '/ingest/batch';
+            const res = await fetch(url, {method: 'POST', body: fd});
+            const data = await res.json();
+            document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+        });
+    });
+</script>
+{% endblock %}

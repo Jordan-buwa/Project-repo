@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}View Database{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Database Explorer (PostgreSQL)</h1>
+
+<!-- Stats -->
+<div class="card mb-3">
+    <div class="card-header">Ingestion Stats</div>
+    <div class="card-body">
+        <button class="btn btn-outline-primary" onclick="fetchStats()">Refresh</button>
+    </div>
+</div>
+
+<!-- Batch lookup -->
+<div class="card mb-3">
+    <div class="card-header">Batch Details</div>
+    <div class="card-body">
+        <form class="row g-2" onsubmit="return false;">
+            <div class="col-auto"><input type="text" class="form-control" id="batch_id" placeholder="Batch ID" required></div>
+            <div class="col-auto"><button class="btn btn-outline-primary" onclick="fetchBatch()">Go</button></div>
+        </form>
+    </div>
+</div>
+
+<!-- Export -->
+<div class="card mb-3">
+    <div class="card-header">Export Data</div>
+    <div class="card-body">
+        <form class="row g-2" onsubmit="return false;">
+            <div class="col-auto">
+                <select class="form-select" id="format"><option value="csv">CSV</option><option value="json">JSON</option></select>
+            </div>
+            <div class="col-auto"><input type="text" class="form-control" id="source" placeholder="Source (opt)"></div>
+            <div class="col-auto"><input type="date" class="form-control" id="start_date"></div>
+            <div class="col-auto"><input type="date" class="form-control" id="end_date"></div>
+            <div class="col-auto"><button class="btn btn-outline-primary" onclick="exportData()">Export</button></div>
+        </form>
+    </div>
+</div>
+
+<!-- Paginated customers -->
+<div class="card mb-3">
+    <div class="card-header">Customer Data (Paginated)</div>
+    <div class="card-body">
+        <form class="row g-2" onsubmit="return false;">
+            <div class="col-auto"><input type="number" class="form-control" id="limit" value="10" min="1"></div>
+            <div class="col-auto"><input type="number" class="form-control" id="offset" value="0" min="0"></div>
+            <div class="col-auto"><button class="btn btn-outline-primary" onclick="fetchCustomers()">Fetch</button></div>
+        </form>
+    </div>
+</div>
+
+<pre id="response" class="bg-light p-3 border rounded mb-3"></pre>
+<table class="table table-striped table-hover" id="dataTable">
+    <thead><tr><th>Loading…</th></tr></thead>
+    <tbody></tbody>
+</table>
+{% endblock %}
+
+{% block javascript %}
+<script>
+    async function fetchStats() {
+        const r = await fetch('/ingest/stats?limit=10');
+        const d = await r.json();
+        showResult(d, false);
+    }
+    async function fetchBatch() {
+        const id = document.getElementById('batch_id').value.trim();
+        const r = await fetch(`/ingest/batch/${id}`);
+        const d = await r.json();
+        showResult(d.records || d, true);
+    }
+    async function exportData() {
+        const fmt = document.getElementById('format').value;
+        const src = document.getElementById('source').value;
+        const s = document.getElementById('start_date').value;
+        const e = document.getElementById('end_date').value;
+        let url = `/ingest/export?format=${fmt}`;
+        if (src) url += `&source=${src}`;
+        if (s)   url += `&start_date=${s}T00:00:00`;
+        if (e)   url += `&end_date=${e}T23:59:59`;
+        const r = await fetch(url);
+        if (fmt === 'csv') {
+            const txt = await r.text();
+            showResult(txt, false);
+            downloadCSV(txt);
+        } else {
+            const d = await r.json();
+            showResult(d.data || d, true);
+        }
+    }
+    async function fetchCustomers() {
+        const lim = document.getElementById('limit').value;
+        const off = document.getElementById('offset').value;
+        const r = await fetch(`/ingest/customers?limit=${lim}&offset=${off}`);
+        const d = await r.json();
+        showResult(d.records, true);
+    }
+
+    function showResult(data, asTable) {
+        const pre = document.getElementById('response');
+        pre.textContent = asTable ? JSON.stringify(data, null, 2) : data;
+
+        const tbl = document.getElementById('dataTable');
+        tbl.innerHTML = '';
+        if (asTable && Array.isArray(data) && data.length) {
+            const cols = Object.keys(data[0]);
+            const thead = tbl.createTHead();
+            const tr = thead.insertRow();
+            cols.forEach(c => { const th = document.createElement('th'); th.textContent = c.toUpperCase(); tr.appendChild(th); });
+
+            const tbody = tbl.createTBody();
+            data.forEach(row => {
+                const tr = tbody.insertRow();
+                cols.forEach(c => {
+                    const td = tr.insertCell();
+                    td.textContent = JSON.stringify(row[c]);
+                });
+            });
+        } else {
+            tbl.createTHead().insertRow().insertCell().textContent = 'No tabular data';
+        }
+    }
+    function downloadCSV(csv) {
+        const blob = new Blob([csv], {type:'text/csv'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'export.csv';
+        a.click();
+    }
+</script>
+{% endblock %}

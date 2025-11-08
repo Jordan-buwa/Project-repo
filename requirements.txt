@@ -13,9 +13,15 @@ torchvision
 imbalanced-learn
 
 # API & Web
-fastapi
+fastapi[standard]
 uvicorn[standard]
 python-multipart
+azure-storage-blob
+PyYAML
+azure-storage-blob
+opencensus-ext-azure
+opencensus-ext-logging
+
 
 # Database
 psycopg2-binary

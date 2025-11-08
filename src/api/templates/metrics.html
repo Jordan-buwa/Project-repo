@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Model Metrics{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">View Model Metrics</div>
+    <div class="card-body">
+        <form id="metricsForm">
+            <div class="mb-3">
+                <label class="form-label">Model Type</label>
+                <select class="form-select" name="model_type" required>
+                    {% for mt in request.app.state.allowed_models %}
+                        <option value="{{ mt }}">{{ mt.replace('-',' ') | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Get Metrics</button>
+        </form>
+    </div>
+</div>
+
+<pre id="response" class="mt-4 bg-light p-3 border rounded"></pre>
+{% endblock %}
+
+{% block javascript %}
+<script>
+    document.getElementById('metricsForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const model = new FormData(e.target).get('model_type');
+        const res = await fetch(`/metrics/${model}`, {method: 'POST'});
+        const data = await res.json();
+        document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+    });
+</script>
+{% endblock %}

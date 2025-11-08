@@ -225,7 +225,7 @@ class NeuralNetworkTrainer():
     # Save model with timestamp
     def save_model(self):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        mod_name = f"nn_model_{timestamp}.pth"
+        mod_name = f"neural_net_model_{timestamp}.pth"
         model_path = os.path.join(MODEL_DIR, mod_name)
         try:
             torch.save(self.model.state_dict(), model_path)
