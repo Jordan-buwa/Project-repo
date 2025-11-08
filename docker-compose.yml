@@ -16,31 +16,78 @@ services:
       - PYTHONPATH=/app
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     depends_on:
-      - mlflow
-      - db
+      mlflow:
+        condition: service_healthy
+      db:
+        condition: service_healthy
     command: >
       python -m src.models.utils.wait_for_services db 5432 http://mlflow:5000 &&
       python src/models/train_xgb.py
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
 
-  # MLFLOW SERVICE
+  # MLFLOW SERVICE - PRODUCTION CONFIG
   mlflow:
     build:
       context: .
       dockerfile: docker/mlflow/Dockerfile
     container_name: mlflow
     command: >
-      mlflow server
-      --host 0.0.0.0
-      --port 5000
-      --backend-store-uri postgresql+psycopg2://mlflow_user:mlflow_pass@db:5432/mlflow_db
-      --default-artifact-root /app/artifacts
+      bash -c "
+        echo 'Waiting for database to be ready...' &&
+        sleep 15 &&
+        echo 'Starting MLflow with Gunicorn...' &&
+        gunicorn 
+          --bind 0.0.0.0:5000 
+          --workers 4 
+          --worker-class sync 
+          --timeout 120 
+          --keep-alive 5 
+          --max-requests 1000 
+          --max-requests-jitter 100 
+          --preload 
+          --access-logfile - 
+          --error-logfile - 
+          --capture-output 
+          --log-level info 
+          mlflow.server:app
+      "
     ports:
       - "8080:5000"
     volumes:
       - ./mlruns:/app/mlruns
       - ./artifacts:/app/artifacts
+      - ./logs/mlflow:/app/logs:rw
+    environment:
+      - MLFLOW_DB_POOL_RECYCLE=3600
+      - MLFLOW_DB_MAX_OVERFLOW=20
+      - MLFLOW_DB_POOL_SIZE=10
+      - MLFLOW_SQLALCHEMYSTORE_POOL_RECYCLE=3600
+      - PYTHONUNBUFFERED=1
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+    restart: unless-stopped
 
   # API SERVICE
   api:
@@ -53,8 +100,8 @@ services:
     env_file:
       - .env
     depends_on:
-      - train
-      - mlflow
+      mlflow:
+        condition: service_healthy
     environment:
       - POSTGRES_HOST=jaw-postgresdb.postgres.database.azure.com
       - POSTGRES_PORT=5432
@@ -69,16 +116,28 @@ services:
     volumes:
       - ./models:/app/models
       - ./data:/app/data
+      - ./logs/api:/app/logs:rw
     command: >
-      python -m src.models.utils.wait_for_services db 5432 http://mlflow:5000 &&
-      uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+      bash -c "
+        python -m src.models.utils.wait_for_services db 5432 http://mlflow:5000 &&
+        uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips '*'
+      "
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    restart: unless-stopped
 
-  # DATABASE SERVICE
+  # DATABASE SERVICE - PRODUCTION CONFIG
   db:
     image: postgres:15
     container_name: mlflow-db
@@ -86,10 +145,46 @@ services:
       POSTGRES_USER: mlflow_user
       POSTGRES_PASSWORD: mlflow_pass
       POSTGRES_DB: mlflow_db
+      POSTGRES_MAX_CONNECTIONS: 200
+      POSTGRES_SHARED_BUFFERS: 512MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 2GB
+      POSTGRES_MAINTENANCE_WORK_MEM: 128MB
+      POSTGRES_CHECKPOINT_COMPLETION_TARGET: 0.9
+      POSTGRES_WAL_BUFFERS: 16MB
+      POSTGRES_DEFAULT_STATISTICS_TARGET: 100
+      POSTGRES_RANDOM_PAGE_COST: 1.1
+      POSTGRES_EFFECTIVE_IO_CONCURRENCY: 200
+      POSTGRES_WORK_MEM: 4MB
+      POSTGRES_MAX_WAL_SIZE: 2GB
+      POSTGRES_MIN_WAL_SIZE: 1GB
     ports:
       - "5432:5432"
     volumes:
       - mlflow-db-data:/var/lib/postgresql/data
+      - ./logs/postgres:/var/log/postgresql:rw
+    command: >
+      postgres 
+        -c shared_buffers=512MB 
+        -c effective_cache_size=2GB 
+        -c maintenance_work_mem=128MB 
+        -c checkpoint_completion_target=0.9 
+        -c wal_buffers=16MB 
+        -c default_statistics_target=100
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlflow_user -d mlflow_db"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+    restart: unless-stopped
 
 volumes:
   mlflow-db-data:
